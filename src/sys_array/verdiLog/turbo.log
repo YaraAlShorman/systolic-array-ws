@@ -1,0 +1,4 @@
+Command Line: /home/projects/ee477.2025wtr/cad/synopsys/verdi/Q-2020.03-SP2-8/platform/LINUXAMD64/bin/Novas -full64 -ssf /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/sim-par-rundir/waveform.fsdb
+uname(Linux linux-lab-107.ece.uw.edu 4.18.0-553.104.1.el8_10.x86_64 #1 SMP Mon Feb 9 02:31:11 EST 2026 x86_64)
+Set sdfDelay Option : max
+au time 865.953450 6.518742 7.814227 delta 367738880 367738880 total 835661824 835661824

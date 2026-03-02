@@ -1,0 +1,93 @@
+@verdi rc file Version 1.0
+[General]
+saveDB = TRUE
+relativePath = FALSE
+saveSingleView = FALSE
+saveNWaveWinId = 
+VerdiVersion = Verdi_Q-2020.03-SP2-8
+[KeyNote]
+Line1 = Automatic Backup 0
+Line2 = Save Open Database Information: Yes
+Line3 = Path Option: Absolute Paths
+Line4 = Windows Option: All Windows
+[OneSearch]
+isExisted = TRUE
+[TestBench]
+ConstrViewShow = 0
+InherViewShow = 0
+FSDBMsgShow = 0
+AnnotationShow = 0
+Console = FALSE
+powerDumped = 0
+[fusa]
+fdb_server = 
+fdb_proj = 
+fdb_campaign = 
+fdb_tool = 
+[hb]
+postSimFile = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/sim-par-rundir/waveform.fsdb
+syncTime = 26063684
+viewport = 0 26 1920 1016 0 0 220 1918
+activeNode = "bsg_double_trouble_pcb.asic.ASIC.guts.\n[0].clnt.clnt .\genblk1.node "
+activeScope = "bsg_double_trouble_pcb.asic.ASIC.guts.\n[0].clnt.clnt .\genblk1.node "
+activeFile = "/home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/par-rundir/bsg_chip.sim.v"
+interactiveMode = False
+viewType = Source
+simulatorMode = False
+sourceBeginLine = 33623
+baMode = False
+srcLineNum = True
+AutoWrap = True
+IdentifyFalseLogic = False
+syncSignal = False
+traceMode = Hierarchical
+showTraceInSchema = True
+paMode = False
+funcMode = False
+powerAwareAnnot = True
+amsAnnot = True
+traceCrossHier = True
+DnDtraceCrossHierOnly = True
+traceIncTopPort = False
+leadingZero = False
+signalPane = False
+SourceVerticalScrollLines = 1
+Scope1 = "bsg_double_trouble_pcb.asic.ASIC.guts.\n[0].clnt.clnt .\genblk1.node "
+Scope2 = "bsg_double_trouble_pcb"
+multipleSelection = 4 33633 1 0 0 33632 1 0 0 33631 1 0 0 33630 1 0 0
+sdfDesign = bsg_chip
+sdfFile = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/par-rundir/bsg_chip.par.sdf
+sdfCheckUndef = FALSE
+simFlow = FALSE
+[hb.design]
+importCmd = "-full64" "-dbdir" "/home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/sim-par-rundir/simv.daidir" 
+invokeDir = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd
+[hb.sourceTab.1]
+scope = bsg_double_trouble_pcb.asic.ASIC.guts.\n[0].clnt.clnt .\genblk1.node 
+File = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/par-rundir/bsg_chip.sim.v
+Line = 33624
+[nMemoryManager]
+WaveformFile = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/build/sim-par-rundir/waveform.fsdb
+UserActionNum = 0
+nMemWindowNum = 0
+[wave.0]
+viewPort = 0 25 1920 496 100 65
+primaryWindow = TRUE
+SessionFile = /home/yarasho/vlsi_lab/ee477-designs-module2/bsg_guts_gcd/verdiLog/novas_autosave.ses.wave.0
+displayGrid = FALSE
+hierarchicalName = FALSE
+snap = TRUE
+displayLeadingZeros = FALSE
+fixDelta = FALSE
+displayCursorMarker = FALSE
+autoUpdate = FALSE
+highlightGlitchs = FALSE
+waveformSyncCursorMarker = FALSE
+waveformSyncHorizontalRange = FALSE
+waveformSyncVerticalscroll = FALSE
+displayErrors = TRUE
+displayMsgSymbols = TRUE
+showMsgDescriptions = TRUE
+autoFit = FALSE
+displayDeltaY = FALSE
+centerCursor = FALSE
