@@ -5,3 +5,6 @@
 # you may manually define constraints here as well.
 
 # TODO: add constraints.
+create_clock -name clk -period 10.0 [get_ports clk_i]
+set_clock_uncertainty 0.100 [get_clocks clk]
+
