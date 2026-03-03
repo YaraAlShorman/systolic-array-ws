@@ -2,7 +2,7 @@
 
 # List of all Verilog source files to include in this build.
 synthesis.inputs.input_files: [
-  "v/pe.v",
+  "v/PE.sv",
   # Add more source files here as needed
 ]
 synthesis.inputs.input_files_meta: [append, subst]
