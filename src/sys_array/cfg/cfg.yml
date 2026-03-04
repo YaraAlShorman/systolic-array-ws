@@ -2,21 +2,10 @@
 
 # Set top level for synthesis
 synthesis.inputs.top_module: "PE" # TODO: update top module name
+sim.inputs.tb_name: "PE_tb"
 
 # Don't synthesize these gate-level netlist modules
 synthesis.inputs.preserve_modules: []
-
-# Turn-off clock gating, issue with sky130 latch model in some clock gate cells
-# when coming out of x leading to failed simulations.
-synthesis.clock_gating_mode: ""
-
-par.innovus.floorplan_mode: "generateplusmanual"
-# upstream: 100x200 = 20,000
-# upsteam area: 13,344
-# downstream: 150x400= 60,000
-# downstream area: 45,855
-# par.innovus.floorplan_script_contents: "
-
 
 # Custom SDC constraints
 vlsi.inputs:
@@ -28,20 +17,14 @@ vlsi.inputs:
   - "constraints.tcl"
   custom_sdc_files_meta: prependlocal # Prepend path of this config file!
 
-  # Pin constraints: p_sdi_* on the left, p_sdo_* on the right, everything else on the bottom
-  pin.assignments: [
-    {pins: "*", layers: ["met2"], side: "bottom"}, # Default to bottom
-    {pins: "p_sdi_*", layers: ["met2"], side: "left"}, # Inputs
-    {pins: "p_sdo_*", layers: ["met2"], side: "right"}, # Outputs
-  ]
 
 # Placement Constraints
 vlsi.inputs.placement_constraints:
   - path: "TOP" # (this name isn't actually checked...)
     type: toplevel
     # Define chip dimensions
-    width:  500
-    height: 500
+    width:  200
+    height: 200
     x: 0
     y: 0
     margins: {left: 0, right: 0, top: 0, bottom: 0}

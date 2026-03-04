@@ -1,39 +1,25 @@
-# tb.yml - Simulation Testbench Configuration
-# TODO: This entire file needs to be filled out with actual testbench information. This is just a template.
-
-# List of Verilog testbenches (or other sources) needed for simulations.
-sim.inputs.tb_input_files: [
-  # Add testbench source files here.
-]
-sim.inputs.tb_input_files_meta: [subst]
-
-# Toplevel simulation module name
-# sim.inputs.tb_name: "bsg_double_trouble_pcb"
-# sim.inputs.dut_path: "bsg_double_trouble_pcb.asic.ASIC"
-
 # Search directories for `include directives in simulations
-# sim.inputs.tb_incdir: [
-#   "${bsg_root}/bsg_misc",
-#   "${bsg_root}/bsg_noc",
-#   "../common/v/packaging",
-#   "../common/v/manycore",
-# ]
-# sim.inputs.tb_incdir_meta: [subst]
+sim.inputs.tb_incdir: [
+  "${bsg_root}/bsg_misc"
+  # TODO: list any additional directories
+]
+sim.inputs.tb_incdir_meta: [subst]
 
-# # Macro definitions for simulations
-# sim.inputs.tb_defines: [
-#   "FSB_LEGACY=1",
-#   "NUM_MASTER_NODES=1",
-#   "CORE_0_PERIOD=25000", # For ASIC
-#   "IO_MASTER_0_PERIOD=40000", # For ASIC
-#   "CORE_1_PERIOD=25000", # For testbench
-#   "IO_MASTER_1_PERIOD=40000", # For testbench
-# ]
-# sim.inputs.tb_defines_meta: [subst]
+# List of Verilog testbenches (or other sources) needed for simulation only.
+sim.inputs.tb_input_files: [
+  # TODO: list verilog files
+  "v/PE_tb.sv",
+  # BSG utilities
+  "${bsg_root}/bsg_misc/bsg_defines.v",
+  "${bsg_root}/bsg_test/bsg_nonsynth_clock_gen.v",
+  "${bsg_root}/bsg_test/bsg_nonsynth_reset_gen.v",
+  "${bsg_root}/bsg_fsb/bsg_fsb_node_trace_replay.v",
+]
+sim.inputs.tb_input_files_meta: [append, subst]
 
-# # List of trace files for the simulation
-# sim.inputs.trace_files: [
-#   "v/bsg_trace_master_0.tr" # Incrementer trace file
-# ]
-# sim.inputs.trace_files_meta: [subst]
+# List of trace files for the simulation
+sim.inputs.trace_files: [
+  # TODO: list any trace files
+  "v/trace.tr"
+]
 
