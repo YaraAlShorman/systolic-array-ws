@@ -9,6 +9,7 @@ sim.inputs.tb_incdir_meta: [subst]
 sim.inputs.tb_input_files: [
   # TODO: list verilog files
   "v/PE_tb.sv",
+  "v/PE_test_ROM.sv",
   # BSG utilities
   "${bsg_root}/bsg_misc/bsg_defines.v",
   "${bsg_root}/bsg_test/bsg_nonsynth_clock_gen.v",
@@ -20,6 +21,6 @@ sim.inputs.tb_input_files_meta: [append, subst]
 # List of trace files for the simulation
 sim.inputs.trace_files: [
   # TODO: list any trace files
-  "v/trace.tr"
+  # "v/trace.tr" // bchang01 - commented out in favor of own made ROM
 ]
 
