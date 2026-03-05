@@ -79,7 +79,8 @@ module PE #(
   assign a_o = a_i;
   assign weight_o = weight_r;
   assign v_o = v_i;
-  assign b_o = b_is_weight_i ? {24'b0, weight_r} : acc;    
+  assign b_o = b_is_weight_i ? {24'b0, b_i} : acc;    
+  //assign b_o = b_is_weight_i ? {24'b0, weight_r} : acc;    
 
 endmodule
 
