@@ -1,16 +1,13 @@
 /* 
  * bchang01 - I made this personal ROM module because we can make our own ROM and test that way
- * Currently, Tested regular operation, bigger operation, just negative a,
- * TODO: test just neg b, both negative, neg_weight for the last three, trigger metastability for weight loading sequence
- *       (done by changing weight while it is calculating), mac bypass testing, etc.
+ * Currently, Tested regular operation, bigger operation, just negative a, just neg b,
+ *      both negative, neg weight for test a+b pos, a neg, b neg, a+b neg, 
+ *      mac bypass testing (as many as needed)
  */ 
 module PE_test_ROM #(addr_width = 5, data_width = 47) (
     input  logic [addr_width-1 : 0] addr_i,
     output logic [data_width-1 : 0] data_o
 );
-
-    // data needs to be 
-
 
     // Formatting:
     // -  format:   <4 bit op> <packet>
@@ -30,7 +27,6 @@ module PE_test_ROM #(addr_width = 5, data_width = 47) (
         1: data_o = {4'b0000, 1'b0, 1'b0, 1'b0, 8'h00, 32'h0000_0000};
         2: data_o = {4'b0000, 1'b0, 1'b0, 1'b0, 8'h00, 32'h0000_0000};
 
-
         // load weight and wait a cycle (A=2 (useless), B = 3 (weight))
         3: data_o = {4'b0001, 1'b1, 1'b1, 1'b0, 8'd02, 32'd3};
         4: data_o = {4'b0000, 1'b0, 1'b0, 1'b0, 8'd00, 32'd0};
@@ -42,7 +38,6 @@ module PE_test_ROM #(addr_width = 5, data_width = 47) (
         7: data_o = {4'b0001, 1'b1, 1'b0, 1'b0, 8'd20, 32'd4};
         // Recv (A = 20 (must match prev A), B = 64 (out)
         8: data_o = {4'b0010, 1'b1, 1'b0, 1'b0, 8'd20, 32'd64};
-
         
         // load weight and wait a cycle (A=27 (useless), B = 4 (weight))
         9: data_o = {4'b0001, 1'b1, 1'b1, 1'b0, 8'd27, 32'd4};
@@ -81,21 +76,6 @@ module PE_test_ROM #(addr_width = 5, data_width = 47) (
         // bypass MAC, expect B directly
         29: data_o = {4'b0001,1'b1,1'b0,1'b1,8'd50,32'd123};
         30: data_o = {4'b0010,1'b1,1'b0,1'b0,8'd50,32'd123};
-
-        // // Test changing weight mid compute - doesn't make sense since the PE finishes in a single cycle
-        // // load weight = 5
-        // 31: data_o = {4'b0001,1'b1,1'b1,1'b0,8'd0,32'd5};
-        // 32: data_o = {4'b0000,1'b0,1'b0,1'b0,8'd0,32'd0};
-        // // compute (10*5)+2 = 52
-        // 33: data_o = {4'b0001,1'b1,1'b0,1'b0,8'd10,32'd2};
-        // // change weight to 7 while it calculates
-        // 34: data_o = {4'b0001,1'b1,1'b1,1'b0,8'd0,32'd7};
-        // // receive expected from first op (because weight should be still registered)
-        // 35: data_o = {4'b0010,1'b1,1'b0,1'b0,8'd10,32'd52};
-                
-        
-        
-
 
         // Finish simulation
         31: data_o = {4'b0100, 1'b0, 1'b0, 1'b0, 8'h00, 32'h0000_0000};
