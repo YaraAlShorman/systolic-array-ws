@@ -1,7 +1,7 @@
 # cfg.yml - Main hammer config file
 
 # Set top level for synthesis
-synthesis.inputs.top_module: "PE" # TODO: update top module name
+synthesis.inputs.top_module: "systolic_ctrl" # TODO: update top module name
 sim.inputs.tb_name: "PE_tb"
 
 # Don't synthesize these gate-level netlist modules
