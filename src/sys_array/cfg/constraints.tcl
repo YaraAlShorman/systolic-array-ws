@@ -6,7 +6,7 @@
 
 # TODO: add constraints.
 create_clock -name clk -period 20.0 [get_ports clk_i]
-set_clock_uncertainty 1.0 [get_clocks clk]
+set_clock_uncertainty 0.6 [get_clocks clk]
 
 # Always set the input/output delay as half periods for clock setup checks
 set_input_delay  7.0 -max -clock [get_clocks clk] [remove_from_collection [all_inputs] [get_ports clk_i]]

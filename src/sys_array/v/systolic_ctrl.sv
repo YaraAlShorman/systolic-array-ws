@@ -1,23 +1,22 @@
 // FSM controller for Systolic array
 
 module systolic_ctrl #(
-	parameter ARRAY_SIZE=8,
+	parameter ARRAY_SIZE=4,
 	parameter DATA_WIDTH=8,
 	parameter PSUM_WIDTH=32
 )(
 	input clk_i,
 	input rst_i,
-	input valid_i,
+	input start,
 	input [15:0] num_input_rows,
-        input signed [DATA_WIDTH-1:0] activations_i [ARRAY_SIZE],
-	input signed [PSUM_WIDTH-1:0] psums_staggered_i [ARRAY_SIZE],
-	output logic signed [DATA_WIDTH-1:0] activations_skewed_o [ARRAY_SIZE],
-	output logic signed [PSUM_WIDTH-1:0] final_psums_o [ARRAY_SIZE],
+        input signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
+	input signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psums_staggered_i,
+	output logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_skewed_o,
+	output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o,
 	output logic b_is_weight,
 	output logic input_valid_to_pe,
-	output logic ready_i,
+	output logic ready_o,
 	output logic output_valid, 
-	output logic valid_o
 );
 
 localparam int LATENCY = (2 * ARRAY_SIZE) - 1;
@@ -31,22 +30,24 @@ typedef enum logic [1:0] {
 
 state_t state, next_state;
 
-logic [15:0] counter, next_counter;
-logic skew_en, deskew_en, start_mac, fsm_idle;
+logic [15:0] counter, next_counter, num_input_rows_reg;
+logic skew_en, deskew_en, fsm_idle;
 logic [LATENCY-1:0] shift_reg;
 
-assign start_mac = valid_i;
-assign ready_i = fsm_idle;
+assign ready_o = fsm_idle;
 
 always_ff @(posedge clk_i) begin
 	if (rst_i) begin
 		state <= IDLE;
 		counter <= 16'b0;
 		shift_reg <= {LATENCY{1'b0}};
+		num_input_rows_reg <= 16'b0;
 	end else begin
 		state <= next_state;
 		counter <= next_counter;
 		shift_reg <= {shift_reg[LATENCY-2:0], input_valid_to_pe};
+		if (start)
+			num_input_rows_reg <= num_input_rows;
 	end
 end
 
@@ -60,14 +61,13 @@ always_comb begin
 	deskew_en = 1'b0;
 	input_valid_to_pe = 1'b0;
 	fsm_idle = 1'b0;
-
+        
 	case (state)
 		IDLE: begin
 			fsm_idle = 1'b1;
-			if (start_mac) begin
+			if (start) begin
 				next_state = LOAD_WTS;
 				next_counter = 16'b0;
-				valid_o = 1'b1;
 			end
 		end
 		LOAD_WTS: begin
@@ -95,7 +95,6 @@ always_comb begin
 			if(counter == (LATENCY - 1)) begin
 				next_state = IDLE;
 			        next_counter = 16'b0;
-				valid_o = 1'b0;
 			end else
 				next_counter = counter + 1'b1;
 		end
