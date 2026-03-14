@@ -22,12 +22,12 @@ puts "read_mmmc /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sy
 read_mmmc /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/mmmc.tcl
 puts "read_physical -lef { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/tech-sky130-cache/sky130_fd_sc_hd__nom.tlef /home/projects/ee477.2025wtr/cad/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef }" 
 read_physical -lef { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/tech-sky130-cache/sky130_fd_sc_hd__nom.tlef /home/projects/ee477.2025wtr/cad/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef }
-puts "read_hdl -sv { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv }" 
-read_hdl -sv { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv }
-puts "elaborate systolic_ctrl" 
-elaborate systolic_ctrl
-puts "init_design -top systolic_ctrl" 
-init_design -top systolic_ctrl
+puts "read_hdl -sv { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/top_mod.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/PE.sv }" 
+read_hdl -sv { /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/top_mod.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/PE.sv }
+puts "elaborate top_mod" 
+elaborate top_mod
+puts "init_design -top top_mod" 
+init_design -top top_mod
 puts "set_db root: .auto_ungroup none" 
 set_db root: .auto_ungroup none
 puts "set_units -capacitance 1.0pF" 
@@ -127,15 +127,15 @@ puts "write_db -to_file pre_write_outputs"
 write_db -to_file pre_write_outputs
 puts "update_names -suffix _mapped -module" 
 update_names -suffix _mapped -module
-puts "write_hdl > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.v" 
-write_hdl > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.v
-puts "write_script > systolic_ctrl.mapped.scr" 
-write_script > systolic_ctrl.mapped.scr
-puts "write_sdc -view ss_100C_1v60.setup_view > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.sdc" 
-write_sdc -view ss_100C_1v60.setup_view > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.sdc
-puts "write_sdf -nosplit_timing_check -timescale ns > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.sdf" 
-write_sdf -nosplit_timing_check -timescale ns > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/systolic_ctrl.mapped.sdf
-puts "write_design -innovus -hierarchical -gzip_files systolic_ctrl" 
-write_design -innovus -hierarchical -gzip_files systolic_ctrl
+puts "write_hdl > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.v" 
+write_hdl > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.v
+puts "write_script > top_mod.mapped.scr" 
+write_script > top_mod.mapped.scr
+puts "write_sdc -view ss_100C_1v60.setup_view > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.sdc" 
+write_sdc -view ss_100C_1v60.setup_view > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.sdc
+puts "write_sdf -nosplit_timing_check -timescale ns > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.sdf" 
+write_sdf -nosplit_timing_check -timescale ns > /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir/top_mod.mapped.sdf
+puts "write_design -innovus -hierarchical -gzip_files top_mod" 
+write_design -innovus -hierarchical -gzip_files top_mod
 puts "quit" 
 quit

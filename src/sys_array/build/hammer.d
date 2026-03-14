@@ -1,5 +1,5 @@
 HAMMER_EXEC ?= /home/rmaiti/EE477_VLSI/systolic-array-ws/ee477-hammer-cad/hammer_run
-HAMMER_DEPENDENCIES ?= /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/paths.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/ee477-hammer-cad/hammer_cfg_top.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/cfg/cfg.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/cfg/src.yml /home/projects/digital-vlsi-cad-files/hammer_env.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv
+HAMMER_DEPENDENCIES ?= /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/paths.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/ee477-hammer-cad/hammer_cfg_top.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/cfg/cfg.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/cfg/src.yml /home/projects/digital-vlsi-cad-files/hammer_env.yml /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/top_mod.sv /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/PE.sv
 
 
 ####################################################################################
@@ -13,7 +13,7 @@ pcb: /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/pcb-rundir/pc
 
 
 ####################################################################################
-## Steps for systolic_ctrl
+## Steps for top_mod
 ####################################################################################
 .PHONY: sim-rtl syn syn-to-sim sim-syn syn-to-par par par-to-sim sim-par sim-par-to-power par-to-power power-par par-to-drc drc par-to-lvs lvs syn-to-formal formal-syn par-to-formal formal-par syn-to-timing timing-syn par-to-timing timing-par
 

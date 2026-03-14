@@ -126,19 +126,19 @@ BASH_FUNC_ml%%=() {  module ml "$@"_}
 BASH_FUNC__module_raw%%=() {  unset _mlshdbg;_ if [ "${MODULES_SILENT_SHELL_DEBUG:-0}" = '1' ]; then_ case "$-" in _ *v*x*)_ set +vx;_ _mlshdbg='vx'_ ;;_ *v*)_ set +v;_ _mlshdbg='v'_ ;;_ *x*)_ set +x;_ _mlshdbg='x'_ ;;_ *)_ _mlshdbg=''_ ;;_ esac;_ fi;_ unset _mlre _mlIFS;_ if [ -n "${IFS+x}" ]; then_ _mlIFS=$IFS;_ fi;_ IFS=' ';_ for _mlv in ${MODULES_RUN_QUARANTINE:-};_ do_ if [ "${_mlv}" = "${_mlv##*[!A-Za-z0-9_]}" -a "${_mlv}" = "${_mlv#[0-9]}" ]; then_ if [ -n "`eval 'echo ${'$_mlv'+x}'`" ]; then_ _mlre="${_mlre:-}${_mlv}_modquar='`eval 'echo ${'$_mlv'}'`' ";_ fi;_ _mlrv="MODULES_RUNENV_${_mlv}";_ _mlre="${_mlre:-}${_mlv}='`eval 'echo ${'$_mlrv':-}'`' ";_ fi;_ done;_ if [ -n "${_mlre:-}" ]; then_ eval `eval ${_mlre} /usr/bin/tclsh /usr/share/Modules/libexec/modulecmd.tcl bash '"$@"'`;_ else_ eval `/usr/bin/tclsh /usr/share/Modules/libexec/modulecmd.tcl bash "$@"`;_ fi;_ _mlstatus=$?;_ if [ -n "${_mlIFS+x}" ]; then_ IFS=$_mlIFS;_ else_ unset IFS;_ fi;_ unset _mlre _mlv _mlrv _mlIFS;_ if [ -n "${_mlshdbg:-}" ]; then_ set -$_mlshdbg;_ fi;_ unset _mlshdbg;_ return $_mlstatus_}
 0
 15
-1773457661 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_top_mod_rom.v
-1773457661 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_systolic_ctrl_rom.v
-1773457661 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_rom.v
+1773462373 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_top_mod_rom.v
+1773462373 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_systolic_ctrl_rom.v
+1773462373 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_rom.v
 1773170763 /home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_fsb/bsg_fsb_node_trace_replay.v
 1773170765 /home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_test/bsg_nonsynth_reset_gen.v
 1773170765 /home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_test/bsg_nonsynth_clock_gen.v
 1773170764 /home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_misc/bsg_defines.v
-1773170727 v/PE_tb.sv
-1773457290 v/top_mod_tb.sv
-1773454552 v/systolic_ctrl_tb.sv
-1773451721 v/PE.sv
-1773454315 v/top_mod.sv
-1773457655 v/systolic_ctrl.sv
+1773459060 v/PE_tb.sv
+1773459062 v/top_mod_tb.sv
+1773459062 v/systolic_ctrl_tb.sv
+1773461307 v/PE.sv
+1773461152 v/top_mod.sv
+1773462357 v/systolic_ctrl.sv
 1630405584 /home/projects/ee477.2025wtr/cad/synopsys/verdi/Q-2020.03-SP2-8/share/PLI/VCS/LINUX64/verdi.tab
 1590808341 /home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib/vcsdp_lite.tab
 4
@@ -146,5 +146,5 @@ BASH_FUNC__module_raw%%=() {  unset _mlshdbg;_ if [ "${MODULES_SILENT_SHELL_DEBU
 1590809310 /home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib/liberrorinf.so
 1590809251 /home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib/libsnpsmalloc.so
 1590809285 /home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib/libvfs.so
-1773457663 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir
+1773462374 /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir
 -1 partitionlib

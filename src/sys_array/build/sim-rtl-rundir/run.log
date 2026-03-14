@@ -1,6 +1,6 @@
 Chronologic VCS simulator copyright 1991-2020
 Contains Synopsys proprietary information.
-Compiler version Q-2020.03-SP1_Full64; Runtime version Q-2020.03-SP1_Full64;  Mar 13 20:07 2026
+Compiler version Q-2020.03-SP1_Full64; Runtime version Q-2020.03-SP1_Full64;  Mar 13 21:26 2026
 
 ======================================================
 Weight Matrix (row = PE row, col = PE column)
@@ -83,5 +83,5 @@ $finish called from file "v/top_mod_tb.sv", line 482.
 $finish at simulation time                 1165
            V C S   S i m u l a t i o n   R e p o r t 
 Time: 1165 ps
-CPU Time:      0.120 seconds;       Data structure size:   0.1Mb
-Fri Mar 13 20:07:44 2026
+CPU Time:      0.130 seconds;       Data structure size:   0.1Mb
+Fri Mar 13 21:26:15 2026

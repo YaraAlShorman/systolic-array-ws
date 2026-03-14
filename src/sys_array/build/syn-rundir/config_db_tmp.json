@@ -106,7 +106,9 @@
     "sim.inputs.execution_flags_prepend": [],
     "sim.inputs.gl_register_force_value": 0,
     "sim.inputs.input_files": [
-        "v/systolic_ctrl.sv"
+        "v/systolic_ctrl.sv",
+        "v/top_mod.sv",
+        "v/PE.sv"
     ],
     "sim.inputs.level": "rtl",
     "sim.inputs.options": [
@@ -129,7 +131,7 @@
     "sim.inputs.sdf_file": null,
     "sim.inputs.seq_cells": "",
     "sim.inputs.tb_dut": "dut",
-    "sim.inputs.tb_name": "systolic_ctrl_tb",
+    "sim.inputs.tb_name": "top_mod_tb",
     "sim.inputs.timescale": "1ns/1ps",
     "sim.inputs.timing_annotated": true,
     "sim.inputs.top_module": "UNSPECIFIED",
@@ -155,10 +157,12 @@
         "-timescale ns"
     ],
     "synthesis.inputs.input_files": [
-        "v/systolic_ctrl.sv"
+        "v/systolic_ctrl.sv",
+        "v/top_mod.sv",
+        "v/PE.sv"
     ],
     "synthesis.inputs.preserve_modules": [],
-    "synthesis.inputs.top_module": "systolic_ctrl",
+    "synthesis.inputs.top_module": "top_mod",
     "synthesis.submit.command": "local",
     "synthesis.submit.settings": [],
     "technology.core.special_cells": null,

@@ -5,5 +5,5 @@ PYTHONPATH=/home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/l
 export PYTHONPATH
 LD_LIBRARY_PATH=/home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib:/home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/lib/pylib27
 export LD_LIBRARY_PATH
-/home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/bin/vcsfind_create_index.exe  -z  "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/./idents_T1Gitu.xml.gz" -o "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/fsearch.db_tmp"
+/home/projects/ee477.2025wtr/cad/synopsys/vcs/Q-2020.03-SP1/linux64/bin/vcsfind_create_index.exe  -z  "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/./idents_cpRwfo.xml.gz" -o "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/fsearch.db_tmp"
 \mv "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/fsearch.db_tmp" "/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/simv.daidir/debug_dump/fsearch/fsearch.db"

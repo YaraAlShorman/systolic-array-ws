@@ -4,4 +4,4 @@ uname(Linux linux-lab-147.ece.uw.edu 4.18.0-553.104.1.el8_10.x86_64 #1 SMP Mon F
 [INFO] error/warning message 'C00381' has been suppressed.
 [INFO] error/warning message 'C00388' has been suppressed.
 [INFO] error/warning message 'C00389' has been suppressed.
-au time 0.155513 0.006737 0.010144 delta 94896128 94896128 total 202932224 202932224
+au time 0.157685 0.007293 0.008416 delta 94699520 94699520 total 202735616 202735616

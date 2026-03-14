@@ -19,7 +19,7 @@ module systolic_ctrl #(
 	output logic output_valid 
 );
 
-localparam int LATENCY = (2 * ARRAY_SIZE);
+localparam int LATENCY = (2 * ARRAY_SIZE)-1;
 
 typedef enum logic [1:0] {
 	IDLE,
@@ -133,7 +133,7 @@ generate
         // Column ARRAY_SIZE-1 gets DELAY=1 instead of 0.
         localparam int DELAY = ARRAY_SIZE - k;
 
-        logic signed [PSUM_WIDTH-1:0] shift_output [DELAY-1:0];
+        logic signed [PSUM_WIDTH-1:0] shift_output [DELAY];
 
         always_ff @(posedge clk_i) begin
             if (rst_i) begin

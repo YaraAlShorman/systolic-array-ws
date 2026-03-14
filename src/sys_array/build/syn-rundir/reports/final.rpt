@@ -1,27 +1,27 @@
 
 
 Working Directory = /home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/syn-rundir
-QoS Summary for systolic_ctrl
+QoS Summary for top_mod
 ================================================================================
 Metric                          final          
 ================================================================================
-Slack (ps):                     5,400
-  R2R (ps):                    12,925
-  I2R (ps):                     8,595
-  R2O (ps):                    11,095
-  I2O (ps):                     5,400
-  CG  (ps):                    11,162
+Slack (ps):                        86
+  R2R (ps):                       658
+  I2R (ps):                        86
+  R2O (ps):                    15,920
+  I2O (ps):                  no_value
+  CG  (ps):                    17,813
 TNS (ps):                           0
   R2R (ps):                         0
   I2R (ps):                         0
   R2O (ps):                         0
-  I2O (ps):                         0
+  I2O (ps):                  no_value
   CG  (ps):                         0
 Failing Paths:                      0
-Cell Area:                      8,217
-Total Cell Area:                8,217
-Leaf Instances:                   677
-Total Instances:                  677
+Cell Area:                    272,111
+Total Cell Area:              272,111
+Leaf Instances:                30,712
+Total Instances:               30,712
 Utilization (%):                 0.00
 Tot. Net Length (um):        no_value
 Avg. Net Length (um):        no_value
@@ -32,17 +32,17 @@ Norm Cong Hotspot Area:
   Max Cong:                  no_value
   Tot Cong:                  no_value
 ================================================================================
-CPU  Runtime (h:m:s):        00:00:07
-Real Runtime (h:m:s):        00:00:11
-CPU  Elapsed (h:m:s):        00:00:09
-Real Elapsed (h:m:s):        00:00:13
-Memory (MB):                  1223.61
+CPU  Runtime (h:m:s):        00:05:38
+Real Runtime (h:m:s):        00:03:12
+CPU  Elapsed (h:m:s):        00:05:40
+Real Elapsed (h:m:s):        00:03:13
+Memory (MB):                  1368.73
 ================================================================================
 ================================================================================
 Flow Settings:
 ================================================================================
-Total Runtime (h:m:s): 00:00:11
-Total Memory (MB):     1223.61
+Total Runtime (h:m:s): 00:03:12
+Total Memory (MB):     1368.73
 Executable Version:    21.12-s068_1
 ================================================================================
 Total Cell Area =  Cell Area + Physical Cell Area
