@@ -11,6 +11,8 @@ sim.inputs.tb_input_files: [
   "v/PE_tb.sv",
   "v/PE_test_ROM.sv",
   "v/systolic_ctrl_tb.sv",
+  "v/top_mod_tb.sv",
+  "v/PE_tb.sv",
   # BSG utilities
   "${bsg_root}/bsg_misc/bsg_defines.v",
   "${bsg_root}/bsg_test/bsg_nonsynth_clock_gen.v",
@@ -23,5 +25,7 @@ sim.inputs.tb_input_files_meta: [append, subst]
 sim.inputs.trace_files: [
   # TODO: list any trace files
   # "v/trace.tr" // bchang01 - commented out in favor of own made ROM
+  "v/trace_systolic_ctrl.tr",
+  "v/trace_top_mod.tr"
 ]
 

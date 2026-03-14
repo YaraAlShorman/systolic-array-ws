@@ -1,7 +1,7 @@
 // FSM controller for Systolic array
 
 module systolic_ctrl #(
-	parameter ARRAY_SIZE=4,
+	parameter ARRAY_SIZE=8,
 	parameter DATA_WIDTH=8,
 	parameter PSUM_WIDTH=32
 )(
@@ -16,10 +16,10 @@ module systolic_ctrl #(
 	output logic b_is_weight,
 	output logic input_valid_to_pe,
 	output logic ready_o,
-	output logic output_valid, 
+	output logic output_valid 
 );
 
-localparam int LATENCY = (2 * ARRAY_SIZE) - 1;
+localparam int LATENCY = (2 * ARRAY_SIZE);
 
 typedef enum logic [1:0] {
 	IDLE,
@@ -126,8 +126,35 @@ generate
 endgenerate
 
 //Logic to de-skew output columns
-
 genvar k;
+generate
+    for (k = 0; k < ARRAY_SIZE; k++) begin : DESKEW_GEN
+        // Give every column at least 1 cycle of output registering.
+        // Column ARRAY_SIZE-1 gets DELAY=1 instead of 0.
+        localparam int DELAY = ARRAY_SIZE - k;
+
+        logic signed [PSUM_WIDTH-1:0] shift_output [DELAY-1:0];
+
+        always_ff @(posedge clk_i) begin
+            if (rst_i) begin
+                for (int m = 0; m < DELAY; m++) begin
+                    shift_output[m] <= '0;
+                end
+            end
+            else if (deskew_en) begin
+                shift_output[0] <= psums_staggered_i[k];
+                for (int m = 1; m < DELAY; m++) begin
+                    shift_output[m] <= shift_output[m-1];
+                end
+            end
+        end
+
+        assign final_psums_o[k] = shift_output[DELAY-1];
+    end
+endgenerate
+
+
+/*genvar k;
 generate
         for (k=0; k<ARRAY_SIZE; k++) begin
 		localparam int DELAY = ARRAY_SIZE - 1 - k;
@@ -147,6 +174,6 @@ generate
 		        assign final_psums_o[k] = shift_output[DELAY-1];
 		end
 	end
-endgenerate	
+endgenerate*/	
 
 endmodule

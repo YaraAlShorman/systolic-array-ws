@@ -80,4 +80,3 @@ module PE #(
   assign b_o = (mac_bypass | b_is_weight_i) ? b_i : acc;
 
 endmodule
-

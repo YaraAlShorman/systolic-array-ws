@@ -1,0 +1,13 @@
+/home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_fsb/bsg_fsb_node_trace_replay.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_misc/bsg_defines.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_test/bsg_nonsynth_clock_gen.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/basejump_stl/bsg_test/bsg_nonsynth_reset_gen.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_rom.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_systolic_ctrl_rom.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/build/sim-rtl-rundir/trace_top_mod_rom.v
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/PE.sv
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/PE_tb.sv
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl.sv
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/systolic_ctrl_tb.sv
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/top_mod.sv
+/home/rmaiti/EE477_VLSI/systolic-array-ws/src/sys_array/v/top_mod_tb.sv

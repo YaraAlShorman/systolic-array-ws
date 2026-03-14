@@ -75,7 +75,7 @@ module systolic_ctrl_tb;
  assign dut_data_lo[175:162] = 14'b0;
 
  // Required for sim-par 
- systolic_ctrl #( .ARRAY_SIZE(4), .DATA_WIDTH(8), .PSUM_WIDTH(32)) DUT (
+ systolic_ctrl #( .ARRAY_SIZE(8), .DATA_WIDTH(8), .PSUM_WIDTH(32)) DUT (
           .clk_i (clk)
          ,.rst_i (reset)
          ,.start (tr_v_lo)
