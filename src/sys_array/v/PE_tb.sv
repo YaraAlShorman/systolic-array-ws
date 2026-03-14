@@ -72,18 +72,23 @@ module PE_tb;
       , .error_o()
       );
 
-  trace_rom #(
-       .width_p(47)		// ## 4-bit command + 43-bit payload
-      ,.addr_width_p(32)
-  ) ROM (
-       .addr_i( rom_addr_li )
-      ,.data_o( rom_data_lo )
-      );
+  // trace_rom #(
+  //      .width_p(47)		// ## 4-bit command + 43-bit payload
+  //     ,.addr_width_p(32)
+  // ) ROM (
+  //      .addr_i( rom_addr_li )
+  //     ,.data_o( rom_data_lo )
+  //     );
+
+  PE_test_ROM #(.addr_width(32), .data_width(47)) ROM (
+      .addr_i( rom_addr_li ),
+      .data_o( rom_data_lo )
+  );
 
   PE #(
      .ENABLE_MAC_BYPASS(1)
-    ,.ROW_ID(0)
-    ,.COL_ID(0)
+    // ,.ROW_ID(0)
+    // ,.COL_ID(0)
   ) DUT (
      .clk_i	   ( clk )
     ,.rst_i	   ( reset )
