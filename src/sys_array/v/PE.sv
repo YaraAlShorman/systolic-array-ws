@@ -36,9 +36,9 @@ module PE #(
   output logic signed [7:0]  weight_o 	// debug stored weight
 );
 
-  logic               mac_bypass_r;
+  logic               mac_bypass;
   logic signed [7:0]  weight_r;
-  logic signed [7:0]  a_gated;		// gated in_a
+  logic signed [15:0] mult16b;
   logic signed [31:0] mult32b;		// sign extended product
   logic signed [31:0] acc;	        // accumulated psum
 
@@ -59,17 +59,15 @@ module PE #(
   // MAC Bypass Control
   // ----------------------------
 
-  // if ENABLE_MAC_BYPASS = 0, mac always enabled (normal operation)
-  assign mac_bypass_r = ENABLE_MAC_BYPASS & mac_bypass_i;
+  // mac_bypass_r = 0 forwards psum without mac
+  assign mac_bypass = ENABLE_MAC_BYPASS & mac_bypass_i;
 
   // ----------------------------
   // MAC Datapath
   // ----------------------------
 
-  // mac_bypass_r = 0 shuts down mult unit
-  assign a_gated = mac_bypass_r ? 8'b0 : a_i; 
-
-  assign mult32b = 32'(weight_r * a_gated);
+  assign mult16b = weight_r * a_i; // mult output
+  assign mult32b = {{16{mult16b[15]}}, mult16b}; // sign extend mult output
   assign acc = mult32b + b_i;
 
   // ----------------------------
@@ -79,7 +77,7 @@ module PE #(
   assign a_o = a_i;
   assign weight_o = weight_r;
   assign v_o = v_i;
-  assign b_o = b_is_weight_i ? {24'b0, weight_r} : acc;    
+  assign b_o = (mac_bypass | b_is_weight_i) ? b_i : acc;
 
 endmodule
 

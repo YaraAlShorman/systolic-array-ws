@@ -10,6 +10,7 @@ sim.inputs.tb_input_files: [
   # TODO: list verilog files
   "v/PE_tb.sv",
   "v/PE_test_ROM.sv",
+  "v/systolic_ctrl_tb.sv",
   # BSG utilities
   "${bsg_root}/bsg_misc/bsg_defines.v",
   "${bsg_root}/bsg_test/bsg_nonsynth_clock_gen.v",
