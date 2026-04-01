@@ -16,10 +16,10 @@
 //
 
 module PE #(
-  ENABLE_MAC_BYPASS = 1	// 1 = use mac_bypass_i input
+  ENABLE_MAC_BYPASS = 1,	// 1 = use mac_bypass_i input
 				// 0 = normal mac operation
-  // ROW_ID = 0, // bchang01 - not needed for now
-  // COL_ID = 0
+  ROW_ID = 0, // bchang01 - not needed for now
+  COL_ID = 0
 )(
   input clk_i,
   input rst_i,
@@ -80,4 +80,3 @@ module PE #(
   assign b_o = (mac_bypass | b_is_weight_i) ? b_i : acc;
 
 endmodule
-
