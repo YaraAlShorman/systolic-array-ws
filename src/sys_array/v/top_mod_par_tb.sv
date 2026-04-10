@@ -1,34 +1,18 @@
 `timescale 1ns/1ps
 
-module top_mod_tb;
+module top_mod_par_tb;
 
-    // ========================================================
-    // 1) Parameters
-    // ========================================================
     localparam int ARRAY_SIZE = 8;
     localparam int DATA_WIDTH = 8;
     localparam int PSUM_WIDTH = 32;
 
-    // ========================================================
-    // 2) DUT signals
-    // ========================================================
     logic clk_i;
     logic rst_i;
     logic start;
     logic [15:0] num_input_rows;
     logic mac_bypass_i;
 
-    logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i;
-    logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] top_data_i;
-
-    logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o;
-    logic ready_o;
-    logic output_valid;
-
-    logic signed [ARRAY_SIZE-1:0][ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_debug_o;
-
-
-    /*logic [7:0]  activations_i_0;
+    logic [7:0]  activations_i_0;
     logic [7:0]  activations_i_1;
     logic [7:0]  activations_i_2;
     logic [7:0]  activations_i_3;
@@ -55,6 +39,8 @@ module top_mod_tb;
     logic [31:0] final_psums_o_6;
     logic [31:0] final_psums_o_7;
 
+    logic ready_o;
+    logic output_valid;
 
     // Optional debug outputs
     logic [7:0] weight_debug_o_0_0;
@@ -127,23 +113,23 @@ module top_mod_tb;
     logic [7:0] weight_debug_o_7_4;
     logic [7:0] weight_debug_o_7_5;
     logic [7:0] weight_debug_o_7_6;
-    logic [7:0] weight_debug_o_7_7;*/
+    logic [7:0] weight_debug_o_7_7;
 
-    // ========================================================
-    // 3) Testbench-only storage
-    // ========================================================
-    logic signed [DATA_WIDTH-1:0] weight_matrix [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
-    logic signed [DATA_WIDTH-1:0] activation_vector [0:ARRAY_SIZE-1];
-    logic signed [PSUM_WIDTH-1:0] expected_psums [0:ARRAY_SIZE-1];
+    // Aggregate TB-side signals used by the original RTL-style testbench code
+    logic signed [DATA_WIDTH-1:0]                 activations_i        [0:ARRAY_SIZE-1];
+    logic signed [PSUM_WIDTH-1:0]                 top_data_i           [0:ARRAY_SIZE-1];
+    logic signed [PSUM_WIDTH-1:0]                 final_psums_o        [0:ARRAY_SIZE-1];
+    logic signed [DATA_WIDTH-1:0]                 weight_debug_o       [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
 
-    logic signed [PSUM_WIDTH-1:0] captured_final_psums [0:ARRAY_SIZE-1];
-    logic                         captured_seen        [0:ARRAY_SIZE-1];
-    logic                         matched_seen         [0:ARRAY_SIZE-1];
+    logic signed [PSUM_WIDTH-1:0]                 captured_final_psums [0:ARRAY_SIZE-1];
+    logic                                         captured_seen        [0:ARRAY_SIZE-1];
+    logic                                         matched_seen         [0:ARRAY_SIZE-1];
 
-    // ========================================================
-    // 4) Instantiate DUT
-    // ========================================================
-    /*top_mod dut (
+    logic signed [DATA_WIDTH-1:0]                 weight_matrix        [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
+    logic signed [DATA_WIDTH-1:0]                 activation_vector    [0:ARRAY_SIZE-1];
+    logic signed [PSUM_WIDTH-1:0]                 expected_psums       [0:ARRAY_SIZE-1];
+
+    top_mod dut (
         .clk_i(clk_i),
         .rst_i(rst_i),
         .start(start),
@@ -352,46 +338,44 @@ module top_mod_tb;
     assign weight_debug_o[7][4] = weight_debug_o_7_4;
     assign weight_debug_o[7][5] = weight_debug_o_7_5;
     assign weight_debug_o[7][6] = weight_debug_o_7_6;
-    assign weight_debug_o[7][7] = weight_debug_o_7_7; */
-    
-    
-    
-    top_mod #(
-        .ARRAY_SIZE(ARRAY_SIZE),
-        .DATA_WIDTH(DATA_WIDTH),
-        .PSUM_WIDTH(PSUM_WIDTH),
-        .ENABLE_MAC_BYPASS(1)
-    ) dut (
-        .clk_i(clk_i),
-        .rst_i(rst_i),
-        .start(start),
-        .num_input_rows(num_input_rows),
-        .activations_i(activations_i),
-        .top_data_i(top_data_i),
-        .mac_bypass_i(mac_bypass_i),
-        .final_psums_o(final_psums_o),
-        .ready_o(ready_o),
-        .output_valid(output_valid),
-        .weight_debug_o(weight_debug_o)
-    );
+    assign weight_debug_o[7][7] = weight_debug_o_7_7;
+
+    always @(posedge clk_i) begin
+        if (rst_i || start || output_valid || ready_o !== 1'b0) begin
+            $display("[%0t] rst=%b start=%b ready=%b output_valid=%b num_input_rows=%0d",
+                    $time, rst_i, start, ready_o, output_valid, num_input_rows);
+        end
+    end
 
     // ========================================================
-    // 5) Clock
+    // 5) clock generation
     // ========================================================
     initial begin
         clk_i = 1'b0;
         forever #5 clk_i = ~clk_i;
     end
+    // ========================================================
+    // 6) Wait helper with timeout
+    // ========================================================
 
-    // ========================================================
-    // 6) Optional waveform dump
-    // ========================================================
-    
-    initial begin
-        $dumpfile("top_mod_tb.vcd");
-        $dumpvars(0, top_mod_tb);
-    end
-    
+    task automatic wait_for_ready_with_timeout(input int max_cycles);
+        int cycles;
+        begin
+            cycles = 0;
+            while ((ready_o !== 1'b1) && (cycles < max_cycles)) begin
+                @(posedge clk_i);
+                cycles++;
+            end
+
+            if (ready_o !== 1'b1) begin
+                $display("[%0t] ERROR: ready_o never asserted within %0d cycles. ready_o=%b output_valid=%b",
+                        $time, max_cycles, ready_o, output_valid);
+                $finish;
+            end
+
+            $display("[%0t] ready_o asserted after %0d cycles.", $time, cycles);
+        end
+    endtask
 
     // ========================================================
     // 7) Clear all inputs and capture storage
@@ -533,6 +517,25 @@ module top_mod_tb;
             rst_i = 1'b1;
             clear_all_inputs();
 
+            repeat (10) @(posedge clk_i);
+
+            rst_i = 1'b0;
+
+            repeat (10) @(posedge clk_i);
+
+            $display("[%0t] Reset released. ready_o=%b output_valid=%b", $time, ready_o, output_valid);
+        end
+    endtask
+    
+    
+    
+    /*task automatic apply_reset;
+        begin
+            $display("[%0t] Applying reset...", $time);
+
+            rst_i = 1'b1;
+            clear_all_inputs();
+
             repeat (4) @(posedge clk_i);
 
             rst_i = 1'b0;
@@ -541,7 +544,7 @@ module top_mod_tb;
 
             $display("[%0t] Reset released.", $time);
         end
-    endtask
+    endtask*/
 
     // ========================================================
     // 12) Load weights
@@ -550,7 +553,8 @@ module top_mod_tb;
         begin
             $display("[%0t] Starting weight load...", $time);
 
-            wait (ready_o == 1'b1);
+            //wait (ready_o == 1'b1);
+            wait_for_ready_with_timeout(100);
             @(negedge clk_i);
 
             // One extra compute cycle compensates for the first launch alignment
@@ -635,6 +639,50 @@ module top_mod_tb;
         begin
             $display("[%0t] Applying one activation vector...", $time);
 
+            // Give the controller a couple of cycles to transition from load to compute
+            repeat (2) @(posedge clk_i);
+
+            @(negedge clk_i);
+            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
+                activations_i[rr] = '0;
+            end
+            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
+            @(posedge clk_i);
+
+            @(negedge clk_i);
+            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
+                activations_i[rr] = '0;
+            end
+            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
+            @(posedge clk_i);
+
+            for (int k = ARRAY_SIZE-2; k >= 0; k--) begin
+                @(negedge clk_i);
+                for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
+                    activations_i[rr] = '0;
+                end
+                activations_i[k] = activation_vector[k];
+                @(posedge clk_i);
+            end
+
+            @(negedge clk_i);
+            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
+                activations_i[rr] = '0;
+            end
+
+            $display("[%0t] Activation vector launch complete.", $time);
+        end
+    endtask
+    
+    
+    
+    
+    
+    
+    /*task automatic drive_one_activation_vector;
+        begin
+            $display("[%0t] Applying one activation vector...", $time);
+
             wait (dut.u_systolic_ctrl.input_valid_to_pe == 1'b1);
 
             // Cycle 0: row 7
@@ -673,12 +721,57 @@ module top_mod_tb;
 
             $display("[%0t] Activation vector launch complete.", $time);
         end
-    endtask
+    endtask */
 
     // ========================================================
     // 15) Capture results from compute start
     // ========================================================
     task automatic capture_results_from_compute_start;
+        localparam int SCAN_CYCLES = 12 * ARRAY_SIZE;
+        int start_wait;
+        begin
+            $display("[%0t] Waiting for output activity and scanning outputs...", $time);
+
+            for (int i = 0; i < ARRAY_SIZE; i++) begin
+                captured_final_psums[i] = '0;
+                captured_seen[i]        = 1'b0;
+                matched_seen[i]         = 1'b0;
+            end
+
+            // Wait up to some cycles for output_valid, but don't hang forever
+            start_wait = 0;
+            while ((output_valid !== 1'b1) && (start_wait < 100)) begin
+                @(posedge clk_i);
+                start_wait++;
+            end
+
+            $display("[%0t] Starting output scan. output_valid=%b after %0d cycles",
+                    $time, output_valid, start_wait);
+
+            repeat (SCAN_CYCLES) begin
+                @(negedge clk_i);
+                for (int i = 0; i < ARRAY_SIZE; i++) begin
+                    if (!matched_seen[i] && (final_psums_o[i] === expected_psums[i])) begin
+                        captured_final_psums[i] = final_psums_o[i];
+                        captured_seen[i]        = 1'b1;
+                        matched_seen[i]         = 1'b1;
+                    end
+                    else if (!matched_seen[i] && (final_psums_o[i] !== '0)) begin
+                        captured_final_psums[i] = final_psums_o[i];
+                        captured_seen[i]        = 1'b1;
+                    end
+                end
+                @(posedge clk_i);
+            end
+
+            $display("[%0t] Output scan finished.", $time);
+        end
+    endtask
+    
+    
+    
+    
+    /*task automatic capture_results_from_compute_start;
         localparam int SCAN_CYCLES = 12 * ARRAY_SIZE;
         begin
             $display("[%0t] Waiting for COMPUTE and scanning outputs...", $time);
@@ -709,7 +802,7 @@ module top_mod_tb;
 
             $display("[%0t] Output scan finished.", $time);
         end
-    endtask
+    endtask*/
 
     // ========================================================
     // 16) Print captured outputs

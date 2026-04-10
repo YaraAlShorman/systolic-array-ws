@@ -102,8 +102,34 @@ always_comb begin
 end
 
 //Logic to skew input rows
-
 genvar i;
+generate
+    for (i = 0; i < ARRAY_SIZE; i++) begin : gen_skew
+        if (i == 0) begin : no_delay
+            assign activations_skewed_o[i] = activations_i[i];
+        end else begin : with_delay
+            logic signed [DATA_WIDTH-1:0] shift_input [0:i-1];
+
+            always_ff @(posedge clk_i) begin
+                if (rst_i) begin
+                    for (int j = 0; j < i; j++) begin
+                        shift_input[j] <= '0;
+                    end
+                end else if (skew_en) begin
+                    shift_input[0] <= activations_i[i];
+                    for (int j = 1; j < i; j++) begin
+                        shift_input[j] <= shift_input[j-1];
+                    end
+                end
+            end
+
+            assign activations_skewed_o[i] = shift_input[i-1];
+        end
+    end
+endgenerate
+
+
+/*genvar i;
 generate
         for (i=0; i<ARRAY_SIZE; i++) begin
 		if (i==0) begin
@@ -123,7 +149,7 @@ generate
                         assign activations_skewed_o[i] = shift_input[i-1];
                 end
         end
-endgenerate
+endgenerate*/
 
 //Logic to de-skew output columns
 genvar k;
