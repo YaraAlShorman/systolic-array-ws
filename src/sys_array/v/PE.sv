@@ -54,7 +54,7 @@ module PE #(
     end
     else begin
       if (v_i && b_is_weight_i) 
-         weight_r <= b_i[7:0];	// weight stored in lower 8 bits
+         weight_shadow <= b_i[7:0];	// weight stored in lower 8 bits
       if (lock_weight_i)
 	 weight_active <= weight_shadow;
     end
