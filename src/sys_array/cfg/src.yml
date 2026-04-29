@@ -5,6 +5,7 @@ synthesis.inputs.input_files: [
   "v/systolic_ctrl.sv",
   "v/top_mod.sv",
   "v/PE.sv",
+  "v/systolic_area_storage.sv",
   # Add more source files here as needed
 ]
 synthesis.inputs.input_files_meta: [append, subst]

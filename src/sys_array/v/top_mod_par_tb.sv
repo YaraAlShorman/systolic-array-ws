@@ -1,892 +1,347 @@
 `timescale 1ns/1ps
 
-module top_mod_par_tb;
+// =====================================================================
+// Clean post-PAR TB clone of top_mod_tb (single module only).
+// Behavior/stimulus/checking match top_mod_tb; only DUT wiring differs:
+// packed-array ports are connected via flattened escape-name pins.
+// =====================================================================
 
-    localparam int ARRAY_SIZE = 8;
+module top_mod_par_tb;
+    localparam string TB_BUILD_ID = "top_mod_par_tb 2026-04-26 flattened-clean-v1";
+
+    initial begin
+`ifndef VERILATOR
+        $fsdbDumpfile("waveform.fsdb");
+        $fsdbDumpvars(0, top_mod_par_tb, "+mda");
+`endif
+        $dumpfile("top_mod_par_tb.vcd");
+        $dumpvars(0, top_mod_par_tb);
+    end
+
+    localparam int N          = 8;
     localparam int DATA_WIDTH = 8;
     localparam int PSUM_WIDTH = 32;
+    localparam int RESET_HOLD_CYCLES = 50;
+    localparam int POST_RST_SETTLE_CYCLES = 8;
+    localparam int READY_WAIT_LIMIT = 5000;
 
-    logic clk_i;
-    logic rst_i;
+    // ---------------- DUT IO ----------------
+    logic clk;
+    logic rst;
     logic start;
-    logic [15:0] num_input_rows;
+    logic activations_valid_i;
     logic mac_bypass_i;
-
-    logic [7:0]  activations_i_0;
-    logic [7:0]  activations_i_1;
-    logic [7:0]  activations_i_2;
-    logic [7:0]  activations_i_3;
-    logic [7:0]  activations_i_4;
-    logic [7:0]  activations_i_5;
-    logic [7:0]  activations_i_6;
-    logic [7:0]  activations_i_7;
-
-    logic [31:0] top_data_i_0;
-    logic [31:0] top_data_i_1;
-    logic [31:0] top_data_i_2;
-    logic [31:0] top_data_i_3;
-    logic [31:0] top_data_i_4;
-    logic [31:0] top_data_i_5;
-    logic [31:0] top_data_i_6;
-    logic [31:0] top_data_i_7;
-
-    logic [31:0] final_psums_o_0;
-    logic [31:0] final_psums_o_1;
-    logic [31:0] final_psums_o_2;
-    logic [31:0] final_psums_o_3;
-    logic [31:0] final_psums_o_4;
-    logic [31:0] final_psums_o_5;
-    logic [31:0] final_psums_o_6;
-    logic [31:0] final_psums_o_7;
-
+    logic signed [N-1:0][DATA_WIDTH-1:0]  activations_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0]  top_data_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0]  final_psums_o;
     logic ready_o;
+    logic shadow_weights_active_o;
     logic output_valid;
+    logic signed [N-1:0][N-1:0][DATA_WIDTH-1:0] weight_debug_o;
 
-    // Optional debug outputs
-    logic [7:0] weight_debug_o_0_0;
-    logic [7:0] weight_debug_o_0_1;
-    logic [7:0] weight_debug_o_0_2;
-    logic [7:0] weight_debug_o_0_3;
-    logic [7:0] weight_debug_o_0_4;
-    logic [7:0] weight_debug_o_0_5;
-    logic [7:0] weight_debug_o_0_6;
-    logic [7:0] weight_debug_o_0_7;
+    // Flattened bridge signals
+    logic signed [N-1:0][DATA_WIDTH-1:0]  tb_activations_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0]  tb_top_data_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0]  tb_final_psums_o;
+    assign tb_activations_i = activations_i;
+    assign tb_top_data_i    = top_data_i;
+    assign final_psums_o    = tb_final_psums_o;
 
-    logic [7:0] weight_debug_o_1_0;
-    logic [7:0] weight_debug_o_1_1;
-    logic [7:0] weight_debug_o_1_2;
-    logic [7:0] weight_debug_o_1_3;
-    logic [7:0] weight_debug_o_1_4;
-    logic [7:0] weight_debug_o_1_5;
-    logic [7:0] weight_debug_o_1_6;
-    logic [7:0] weight_debug_o_1_7;
+    top_mod #(
+        .ARRAY_SIZE       (N),
+        .DATA_WIDTH       (DATA_WIDTH),
+        .PSUM_WIDTH       (PSUM_WIDTH),
+        .ENABLE_MAC_BYPASS(0)
+    ) dut (
+        .clk_i                   (clk),
+        .rst_i                   (rst),
+        .start                   (start),
+        .activations_valid_i     (activations_valid_i),
+        .mac_bypass_i            (mac_bypass_i),
+        .ready_o                 (ready_o),
+        .shadow_weights_active_o (shadow_weights_active_o),
+        .output_valid            (output_valid),
+       // .weight_debug_o          (weight_debug_o),
 
-    logic [7:0] weight_debug_o_2_0;
-    logic [7:0] weight_debug_o_2_1;
-    logic [7:0] weight_debug_o_2_2;
-    logic [7:0] weight_debug_o_2_3;
-    logic [7:0] weight_debug_o_2_4;
-    logic [7:0] weight_debug_o_2_5;
-    logic [7:0] weight_debug_o_2_6;
-    logic [7:0] weight_debug_o_2_7;
+        .\activations_i[0] (tb_activations_i[0]),
+        .\activations_i[1] (tb_activations_i[1]),
+        .\activations_i[2] (tb_activations_i[2]),
+        .\activations_i[3] (tb_activations_i[3]),
+        .\activations_i[4] (tb_activations_i[4]),
+        .\activations_i[5] (tb_activations_i[5]),
+        .\activations_i[6] (tb_activations_i[6]),
+        .\activations_i[7] (tb_activations_i[7]),
 
-    logic [7:0] weight_debug_o_3_0;
-    logic [7:0] weight_debug_o_3_1;
-    logic [7:0] weight_debug_o_3_2;
-    logic [7:0] weight_debug_o_3_3;
-    logic [7:0] weight_debug_o_3_4;
-    logic [7:0] weight_debug_o_3_5;
-    logic [7:0] weight_debug_o_3_6;
-    logic [7:0] weight_debug_o_3_7;
+        .\top_data_i[0] (tb_top_data_i[0]),
+        .\top_data_i[1] (tb_top_data_i[1]),
+        .\top_data_i[2] (tb_top_data_i[2]),
+        .\top_data_i[3] (tb_top_data_i[3]),
+        .\top_data_i[4] (tb_top_data_i[4]),
+        .\top_data_i[5] (tb_top_data_i[5]),
+        .\top_data_i[6] (tb_top_data_i[6]),
+        .\top_data_i[7] (tb_top_data_i[7]),
 
-    logic [7:0] weight_debug_o_4_0;
-    logic [7:0] weight_debug_o_4_1;
-    logic [7:0] weight_debug_o_4_2;
-    logic [7:0] weight_debug_o_4_3;
-    logic [7:0] weight_debug_o_4_4;
-    logic [7:0] weight_debug_o_4_5;
-    logic [7:0] weight_debug_o_4_6;
-    logic [7:0] weight_debug_o_4_7;
-
-    logic [7:0] weight_debug_o_5_0;
-    logic [7:0] weight_debug_o_5_1;
-    logic [7:0] weight_debug_o_5_2;
-    logic [7:0] weight_debug_o_5_3;
-    logic [7:0] weight_debug_o_5_4;
-    logic [7:0] weight_debug_o_5_5;
-    logic [7:0] weight_debug_o_5_6;
-    logic [7:0] weight_debug_o_5_7;
-
-    logic [7:0] weight_debug_o_6_0;
-    logic [7:0] weight_debug_o_6_1;
-    logic [7:0] weight_debug_o_6_2;
-    logic [7:0] weight_debug_o_6_3;
-    logic [7:0] weight_debug_o_6_4;
-    logic [7:0] weight_debug_o_6_5;
-    logic [7:0] weight_debug_o_6_6;
-    logic [7:0] weight_debug_o_6_7;
-
-    logic [7:0] weight_debug_o_7_0;
-    logic [7:0] weight_debug_o_7_1;
-    logic [7:0] weight_debug_o_7_2;
-    logic [7:0] weight_debug_o_7_3;
-    logic [7:0] weight_debug_o_7_4;
-    logic [7:0] weight_debug_o_7_5;
-    logic [7:0] weight_debug_o_7_6;
-    logic [7:0] weight_debug_o_7_7;
-
-    // Aggregate TB-side signals used by the original RTL-style testbench code
-    logic signed [DATA_WIDTH-1:0]                 activations_i        [0:ARRAY_SIZE-1];
-    logic signed [PSUM_WIDTH-1:0]                 top_data_i           [0:ARRAY_SIZE-1];
-    logic signed [PSUM_WIDTH-1:0]                 final_psums_o        [0:ARRAY_SIZE-1];
-    logic signed [DATA_WIDTH-1:0]                 weight_debug_o       [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
-
-    logic signed [PSUM_WIDTH-1:0]                 captured_final_psums [0:ARRAY_SIZE-1];
-    logic                                         captured_seen        [0:ARRAY_SIZE-1];
-    logic                                         matched_seen         [0:ARRAY_SIZE-1];
-
-    logic signed [DATA_WIDTH-1:0]                 weight_matrix        [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
-    logic signed [DATA_WIDTH-1:0]                 activation_vector    [0:ARRAY_SIZE-1];
-    logic signed [PSUM_WIDTH-1:0]                 expected_psums       [0:ARRAY_SIZE-1];
-
-    top_mod dut (
-        .clk_i(clk_i),
-        .rst_i(rst_i),
-        .start(start),
-        .num_input_rows(num_input_rows),
-
-        .\activations_i[0] (activations_i_0),
-        .\activations_i[1] (activations_i_1),
-        .\activations_i[2] (activations_i_2),
-        .\activations_i[3] (activations_i_3),
-        .\activations_i[4] (activations_i_4),
-        .\activations_i[5] (activations_i_5),
-        .\activations_i[6] (activations_i_6),
-        .\activations_i[7] (activations_i_7),
-
-        .\top_data_i[0] (top_data_i_0),
-        .\top_data_i[1] (top_data_i_1),
-        .\top_data_i[2] (top_data_i_2),
-        .\top_data_i[3] (top_data_i_3),
-        .\top_data_i[4] (top_data_i_4),
-        .\top_data_i[5] (top_data_i_5),
-        .\top_data_i[6] (top_data_i_6),
-        .\top_data_i[7] (top_data_i_7),
-
-        .mac_bypass_i(mac_bypass_i),
-
-        .\final_psums_o[0] (final_psums_o_0),
-        .\final_psums_o[1] (final_psums_o_1),
-        .\final_psums_o[2] (final_psums_o_2),
-        .\final_psums_o[3] (final_psums_o_3),
-        .\final_psums_o[4] (final_psums_o_4),
-        .\final_psums_o[5] (final_psums_o_5),
-        .\final_psums_o[6] (final_psums_o_6),
-        .\final_psums_o[7] (final_psums_o_7),
-
-        .ready_o(ready_o),
-        .output_valid(output_valid),
-
-        .\weight_debug_o[0][0] (weight_debug_o_0_0),
-        .\weight_debug_o[0][1] (weight_debug_o_0_1),
-        .\weight_debug_o[0][2] (weight_debug_o_0_2),
-        .\weight_debug_o[0][3] (weight_debug_o_0_3),
-        .\weight_debug_o[0][4] (weight_debug_o_0_4),
-        .\weight_debug_o[0][5] (weight_debug_o_0_5),
-        .\weight_debug_o[0][6] (weight_debug_o_0_6),
-        .\weight_debug_o[0][7] (weight_debug_o_0_7),
-
-        .\weight_debug_o[1][0] (weight_debug_o_1_0),
-        .\weight_debug_o[1][1] (weight_debug_o_1_1),
-        .\weight_debug_o[1][2] (weight_debug_o_1_2),
-        .\weight_debug_o[1][3] (weight_debug_o_1_3),
-        .\weight_debug_o[1][4] (weight_debug_o_1_4),
-        .\weight_debug_o[1][5] (weight_debug_o_1_5),
-        .\weight_debug_o[1][6] (weight_debug_o_1_6),
-        .\weight_debug_o[1][7] (weight_debug_o_1_7),
-
-        .\weight_debug_o[2][0] (weight_debug_o_2_0),
-        .\weight_debug_o[2][1] (weight_debug_o_2_1),
-        .\weight_debug_o[2][2] (weight_debug_o_2_2),
-        .\weight_debug_o[2][3] (weight_debug_o_2_3),
-        .\weight_debug_o[2][4] (weight_debug_o_2_4),
-        .\weight_debug_o[2][5] (weight_debug_o_2_5),
-        .\weight_debug_o[2][6] (weight_debug_o_2_6),
-        .\weight_debug_o[2][7] (weight_debug_o_2_7),
-
-        .\weight_debug_o[3][0] (weight_debug_o_3_0),
-        .\weight_debug_o[3][1] (weight_debug_o_3_1),
-        .\weight_debug_o[3][2] (weight_debug_o_3_2),
-        .\weight_debug_o[3][3] (weight_debug_o_3_3),
-        .\weight_debug_o[3][4] (weight_debug_o_3_4),
-        .\weight_debug_o[3][5] (weight_debug_o_3_5),
-        .\weight_debug_o[3][6] (weight_debug_o_3_6),
-        .\weight_debug_o[3][7] (weight_debug_o_3_7),
-
-        .\weight_debug_o[4][0] (weight_debug_o_4_0),
-        .\weight_debug_o[4][1] (weight_debug_o_4_1),
-        .\weight_debug_o[4][2] (weight_debug_o_4_2),
-        .\weight_debug_o[4][3] (weight_debug_o_4_3),
-        .\weight_debug_o[4][4] (weight_debug_o_4_4),
-        .\weight_debug_o[4][5] (weight_debug_o_4_5),
-        .\weight_debug_o[4][6] (weight_debug_o_4_6),
-        .\weight_debug_o[4][7] (weight_debug_o_4_7),
-
-        .\weight_debug_o[5][0] (weight_debug_o_5_0),
-        .\weight_debug_o[5][1] (weight_debug_o_5_1),
-        .\weight_debug_o[5][2] (weight_debug_o_5_2),
-        .\weight_debug_o[5][3] (weight_debug_o_5_3),
-        .\weight_debug_o[5][4] (weight_debug_o_5_4),
-        .\weight_debug_o[5][5] (weight_debug_o_5_5),
-        .\weight_debug_o[5][6] (weight_debug_o_5_6),
-        .\weight_debug_o[5][7] (weight_debug_o_5_7),
-
-        .\weight_debug_o[6][0] (weight_debug_o_6_0),
-        .\weight_debug_o[6][1] (weight_debug_o_6_1),
-        .\weight_debug_o[6][2] (weight_debug_o_6_2),
-        .\weight_debug_o[6][3] (weight_debug_o_6_3),
-        .\weight_debug_o[6][4] (weight_debug_o_6_4),
-        .\weight_debug_o[6][5] (weight_debug_o_6_5),
-        .\weight_debug_o[6][6] (weight_debug_o_6_6),
-        .\weight_debug_o[6][7] (weight_debug_o_6_7),
-
-        .\weight_debug_o[7][0] (weight_debug_o_7_0),
-        .\weight_debug_o[7][1] (weight_debug_o_7_1),
-        .\weight_debug_o[7][2] (weight_debug_o_7_2),
-        .\weight_debug_o[7][3] (weight_debug_o_7_3),
-        .\weight_debug_o[7][4] (weight_debug_o_7_4),
-        .\weight_debug_o[7][5] (weight_debug_o_7_5),
-        .\weight_debug_o[7][6] (weight_debug_o_7_6),
-        .\weight_debug_o[7][7] (weight_debug_o_7_7)
+        .\final_psums_o[0] (tb_final_psums_o[0]),
+        .\final_psums_o[1] (tb_final_psums_o[1]),
+        .\final_psums_o[2] (tb_final_psums_o[2]),
+        .\final_psums_o[3] (tb_final_psums_o[3]),
+        .\final_psums_o[4] (tb_final_psums_o[4]),
+        .\final_psums_o[5] (tb_final_psums_o[5]),
+        .\final_psums_o[6] (tb_final_psums_o[6]),
+        .\final_psums_o[7] (tb_final_psums_o[7])
     );
 
-    // Bridge TB aggregate arrays to flattened PAR ports
-    assign activations_i_0 = activations_i[0];
-    assign activations_i_1 = activations_i[1];
-    assign activations_i_2 = activations_i[2];
-    assign activations_i_3 = activations_i[3];
-    assign activations_i_4 = activations_i[4];
-    assign activations_i_5 = activations_i[5];
-    assign activations_i_6 = activations_i[6];
-    assign activations_i_7 = activations_i[7];
+    // ---------------- Clock ----------------
+    initial clk = 1'b0;
+    always #5 clk = ~clk;
 
-    assign top_data_i_0 = top_data_i[0];
-    assign top_data_i_1 = top_data_i[1];
-    assign top_data_i_2 = top_data_i[2];
-    assign top_data_i_3 = top_data_i[3];
-    assign top_data_i_4 = top_data_i[4];
-    assign top_data_i_5 = top_data_i[5];
-    assign top_data_i_6 = top_data_i[6];
-    assign top_data_i_7 = top_data_i[7];
+    // ---------------- Test data ----------------
+    logic signed [DATA_WIDTH-1:0] A1   [0:N-1][0:N-1];
+    logic signed [DATA_WIDTH-1:0] B1   [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] IP1  [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C1_exp    [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C1_actual [0:N-1][0:N-1];
 
-    assign final_psums_o[0] = final_psums_o_0;
-    assign final_psums_o[1] = final_psums_o_1;
-    assign final_psums_o[2] = final_psums_o_2;
-    assign final_psums_o[3] = final_psums_o_3;
-    assign final_psums_o[4] = final_psums_o_4;
-    assign final_psums_o[5] = final_psums_o_5;
-    assign final_psums_o[6] = final_psums_o_6;
-    assign final_psums_o[7] = final_psums_o_7;
+    logic signed [DATA_WIDTH-1:0] A2   [0:N-1][0:N-1];
+    logic signed [DATA_WIDTH-1:0] B2   [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] IP2  [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C2_exp    [0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C2_actual [0:N-1][0:N-1];
 
-    assign weight_debug_o[0][0] = weight_debug_o_0_0;
-    assign weight_debug_o[0][1] = weight_debug_o_0_1;
-    assign weight_debug_o[0][2] = weight_debug_o_0_2;
-    assign weight_debug_o[0][3] = weight_debug_o_0_3;
-    assign weight_debug_o[0][4] = weight_debug_o_0_4;
-    assign weight_debug_o[0][5] = weight_debug_o_0_5;
-    assign weight_debug_o[0][6] = weight_debug_o_0_6;
-    assign weight_debug_o[0][7] = weight_debug_o_0_7;
+    function automatic logic signed [PSUM_WIDTH-1:0] sext8(input logic signed [DATA_WIDTH-1:0] x);
+        return $signed({{(PSUM_WIDTH-DATA_WIDTH){x[DATA_WIDTH-1]}}, x});
+    endfunction
 
-    assign weight_debug_o[1][0] = weight_debug_o_1_0;
-    assign weight_debug_o[1][1] = weight_debug_o_1_1;
-    assign weight_debug_o[1][2] = weight_debug_o_1_2;
-    assign weight_debug_o[1][3] = weight_debug_o_1_3;
-    assign weight_debug_o[1][4] = weight_debug_o_1_4;
-    assign weight_debug_o[1][5] = weight_debug_o_1_5;
-    assign weight_debug_o[1][6] = weight_debug_o_1_6;
-    assign weight_debug_o[1][7] = weight_debug_o_1_7;
-
-    assign weight_debug_o[2][0] = weight_debug_o_2_0;
-    assign weight_debug_o[2][1] = weight_debug_o_2_1;
-    assign weight_debug_o[2][2] = weight_debug_o_2_2;
-    assign weight_debug_o[2][3] = weight_debug_o_2_3;
-    assign weight_debug_o[2][4] = weight_debug_o_2_4;
-    assign weight_debug_o[2][5] = weight_debug_o_2_5;
-    assign weight_debug_o[2][6] = weight_debug_o_2_6;
-    assign weight_debug_o[2][7] = weight_debug_o_2_7;
-
-    assign weight_debug_o[3][0] = weight_debug_o_3_0;
-    assign weight_debug_o[3][1] = weight_debug_o_3_1;
-    assign weight_debug_o[3][2] = weight_debug_o_3_2;
-    assign weight_debug_o[3][3] = weight_debug_o_3_3;
-    assign weight_debug_o[3][4] = weight_debug_o_3_4;
-    assign weight_debug_o[3][5] = weight_debug_o_3_5;
-    assign weight_debug_o[3][6] = weight_debug_o_3_6;
-    assign weight_debug_o[3][7] = weight_debug_o_3_7;
-
-    assign weight_debug_o[4][0] = weight_debug_o_4_0;
-    assign weight_debug_o[4][1] = weight_debug_o_4_1;
-    assign weight_debug_o[4][2] = weight_debug_o_4_2;
-    assign weight_debug_o[4][3] = weight_debug_o_4_3;
-    assign weight_debug_o[4][4] = weight_debug_o_4_4;
-    assign weight_debug_o[4][5] = weight_debug_o_4_5;
-    assign weight_debug_o[4][6] = weight_debug_o_4_6;
-    assign weight_debug_o[4][7] = weight_debug_o_4_7;
-
-    assign weight_debug_o[5][0] = weight_debug_o_5_0;
-    assign weight_debug_o[5][1] = weight_debug_o_5_1;
-    assign weight_debug_o[5][2] = weight_debug_o_5_2;
-    assign weight_debug_o[5][3] = weight_debug_o_5_3;
-    assign weight_debug_o[5][4] = weight_debug_o_5_4;
-    assign weight_debug_o[5][5] = weight_debug_o_5_5;
-    assign weight_debug_o[5][6] = weight_debug_o_5_6;
-    assign weight_debug_o[5][7] = weight_debug_o_5_7;
-
-    assign weight_debug_o[6][0] = weight_debug_o_6_0;
-    assign weight_debug_o[6][1] = weight_debug_o_6_1;
-    assign weight_debug_o[6][2] = weight_debug_o_6_2;
-    assign weight_debug_o[6][3] = weight_debug_o_6_3;
-    assign weight_debug_o[6][4] = weight_debug_o_6_4;
-    assign weight_debug_o[6][5] = weight_debug_o_6_5;
-    assign weight_debug_o[6][6] = weight_debug_o_6_6;
-    assign weight_debug_o[6][7] = weight_debug_o_6_7;
-
-    assign weight_debug_o[7][0] = weight_debug_o_7_0;
-    assign weight_debug_o[7][1] = weight_debug_o_7_1;
-    assign weight_debug_o[7][2] = weight_debug_o_7_2;
-    assign weight_debug_o[7][3] = weight_debug_o_7_3;
-    assign weight_debug_o[7][4] = weight_debug_o_7_4;
-    assign weight_debug_o[7][5] = weight_debug_o_7_5;
-    assign weight_debug_o[7][6] = weight_debug_o_7_6;
-    assign weight_debug_o[7][7] = weight_debug_o_7_7;
-
-    always @(posedge clk_i) begin
-        if (rst_i || start || output_valid || ready_o !== 1'b0) begin
-            $display("[%0t] rst=%b start=%b ready=%b output_valid=%b num_input_rows=%0d",
-                    $time, rst_i, start, ready_o, output_valid, num_input_rows);
+    task automatic compute_expected(
+        input  logic signed [DATA_WIDTH-1:0] A  [0:N-1][0:N-1],
+        input  logic signed [DATA_WIDTH-1:0] B  [0:N-1][0:N-1],
+        input  logic signed [PSUM_WIDTH-1:0] IP [0:N-1][0:N-1],
+        output logic signed [PSUM_WIDTH-1:0] C  [0:N-1][0:N-1]
+    );
+        for (int i = 0; i < N; i++) begin
+            for (int c = 0; c < N; c++) begin
+                logic signed [PSUM_WIDTH-1:0] acc;
+                acc = IP[i][c];
+                for (int k = 0; k < N; k++)
+                    acc = acc + sext8(A[i][k]) * sext8(B[k][c]);
+                C[i][c] = acc;
+            end
         end
+    endtask
+
+    task automatic disp_int8(input logic signed [DATA_WIDTH-1:0] M [0:N-1][0:N-1], input string name);
+        $display("[%0t] %s (8x8 INT8):", $time, name);
+        for (int r = 0; r < N; r++)
+            $display("[%0t]   row %0d : %4d %4d %4d %4d %4d %4d %4d %4d", $time, r,
+                $signed(M[r][0]), $signed(M[r][1]), $signed(M[r][2]), $signed(M[r][3]),
+                $signed(M[r][4]), $signed(M[r][5]), $signed(M[r][6]), $signed(M[r][7]));
+    endtask
+
+    task automatic disp_int32(input logic signed [PSUM_WIDTH-1:0] M [0:N-1][0:N-1], input string name);
+        $display("[%0t] %s (8x8 INT32):", $time, name);
+        for (int r = 0; r < N; r++)
+            $display("[%0t]   row %0d : %0d %0d %0d %0d %0d %0d %0d %0d", $time, r,
+                M[r][0], M[r][1], M[r][2], M[r][3], M[r][4], M[r][5], M[r][6], M[r][7]);
+    endtask
+
+    initial begin
+        repeat (10000) @(posedge clk);
+        $display("[%0t] WATCHDOG TIMEOUT", $time);
+        $finish;
     end
 
-    // ========================================================
-    // 5) clock generation
-    // ========================================================
+    task automatic pulse_start_only();
+        @(posedge clk); #1; start = 1'b1;
+        @(posedge clk); #1; start = 1'b0;
+    endtask
+
+    task automatic drive_load_wts(input logic signed [DATA_WIDTH-1:0] W [0:N-1][0:N-1]);
+        @(posedge clk); #1;
+        start = 1'b1;
+        for (int c = 0; c < N; c++) top_data_i[c] = sext8(W[N-1][c]);
+        $display("[%0t] start HIGH, pre-stage W[%0d] (LOAD_WTS first cycle)", $time, N-1);
+        @(posedge clk); #1;
+        start = 1'b0;
+        @(posedge clk); #1;
+        for (int t = 1; t < N; t++) begin
+            for (int c = 0; c < N; c++) top_data_i[c] = sext8(W[N-1-t][c]);
+            $display("[%0t] LOAD_WTS row %0d -> W[%0d]", $time, t, N-1-t);
+            @(posedge clk); #1;
+        end
+    endtask
+
+    task automatic drive_compute_and_wavefront(
+        input logic signed [DATA_WIDTH-1:0] A  [0:N-1][0:N-1],
+        input logic signed [PSUM_WIDTH-1:0] IP [0:N-1][0:N-1]
+    );
+        @(posedge clk); #1;
+        for (int t = 0; t < 2*N - 1; t++) begin
+            if (t < N) begin
+                activations_valid_i = 1'b1;
+                for (int r = 0; r < N; r++) activations_i[r] = A[t][r];
+            end else begin
+                activations_valid_i = 1'b0;
+                activations_i = '0;
+            end
+            for (int c = 0; c < N; c++) begin
+                int rr;
+                rr = t - c;
+                if (rr >= 0 && rr < N) top_data_i[c] = IP[rr][c];
+                else top_data_i[c] = '0;
+            end
+            @(posedge clk); #1;
+        end
+        activations_valid_i = 1'b0;
+        activations_i = '0;
+        top_data_i = '0;
+    endtask
+
+    task automatic drive_shadow_weights(input logic signed [DATA_WIDTH-1:0] W [0:N-1][0:N-1]);
+        @(posedge clk); #1;
+        while (shadow_weights_active_o !== 1'b1) begin
+            for (int c = 0; c < N; c++) top_data_i[c] = sext8(W[N-1][c]);
+            @(posedge clk); #1;
+        end
+        @(posedge clk); #1;
+        for (int t = 1; t < N; t++) begin
+            for (int c = 0; c < N; c++) top_data_i[c] = sext8(W[N-1-t][c]);
+            @(posedge clk); #1;
+        end
+        top_data_i = '0;
+    endtask
+
+    task automatic wait_for_shadow_drop();
+        while (shadow_weights_active_o !== 1'b0) @(posedge clk);
+    endtask
+
+    task automatic sample_results(ref logic signed [PSUM_WIDTH-1:0] C [0:N-1][0:N-1]);
+        logic ov_prev;
+        int high_cycles;
+        ov_prev = output_valid;
+        while (1) begin
+            @(posedge clk);
+            if (output_valid === 1'b1 && ov_prev === 1'b0) break;
+            ov_prev = output_valid;
+        end
+        for (int i = 0; i < N; i++) begin
+            #1;
+            for (int c = 0; c < N; c++) C[i][c] = final_psums_o[c];
+            @(posedge clk);
+        end
+        high_cycles = 0;
+        while (output_valid === 1'b1) begin
+            high_cycles++;
+            @(posedge clk);
+        end
+        $display("[%0t] output_valid pulse width observed after capture: %0d cycle(s)", $time, N + high_cycles);
+    endtask
+
+    function automatic int compare(
+        input logic signed [PSUM_WIDTH-1:0] actual   [0:N-1][0:N-1],
+        input logic signed [PSUM_WIDTH-1:0] expected [0:N-1][0:N-1],
+        input string name
+    );
+        int errors;
+        errors = 0;
+        for (int i = 0; i < N; i++) begin
+            for (int c = 0; c < N; c++) begin
+                if (actual[i][c] !== expected[i][c]) begin
+                    $display("[%0t] MISMATCH %s[%0d][%0d] : got %0d  expected %0d  (delta %0d)",
+                        $time, name, i, c, actual[i][c], expected[i][c], actual[i][c] - expected[i][c]);
+                    errors++;
+                end
+            end
+        end
+        return errors;
+    endfunction
+
+    function automatic logic signed [DATA_WIDTH-1:0] nz8(input int v);
+        logic signed [DATA_WIDTH-1:0] x;
+        x = DATA_WIDTH'(v);
+        if (x == 0) x = 8'sd1;
+        return x;
+    endfunction
+
+    function automatic logic signed [PSUM_WIDTH-1:0] nz32(input int v);
+        logic signed [PSUM_WIDTH-1:0] x;
+        x = v;
+        if (x == 0) x = 32'sd1;
+        return x;
+    endfunction
+
     initial begin
-        clk_i = 1'b0;
-        forever #5 clk_i = ~clk_i;
-    end
-    // ========================================================
-    // 6) Wait helper with timeout
-    // ========================================================
+        int errors;
+        errors = 0;
+        $display("[%0t] TB_BUILD_ID: %s", $time, TB_BUILD_ID);
 
-    task automatic wait_for_ready_with_timeout(input int max_cycles);
-        int cycles;
-        begin
-            cycles = 0;
-            while ((ready_o !== 1'b1) && (cycles < max_cycles)) begin
-                @(posedge clk_i);
-                cycles++;
-            end
+        rst                 = 1'b1;
+        start               = 1'b0;
+        activations_valid_i = 1'b0;
+        mac_bypass_i        = 1'b0;
+        activations_i       = '0;
+        top_data_i          = '0;
 
-            if (ready_o !== 1'b1) begin
-                $display("[%0t] ERROR: ready_o never asserted within %0d cycles. ready_o=%b output_valid=%b",
-                        $time, max_cycles, ready_o, output_valid);
-                $finish;
-            end
-
-            $display("[%0t] ready_o asserted after %0d cycles.", $time, cycles);
-        end
-    endtask
-
-    // ========================================================
-    // 7) Clear all inputs and capture storage
-    // ========================================================
-    task automatic clear_all_inputs;
-        begin
-            start          = 1'b0;
-            num_input_rows = '0;
-            mac_bypass_i   = 1'b0;
-
-            for (int i = 0; i < ARRAY_SIZE; i++) begin
-                activations_i[i]        = '0;
-                top_data_i[i]           = '0;
-                captured_final_psums[i] = '0;
-                captured_seen[i]        = 1'b0;
-                matched_seen[i]         = 1'b0;
+        for (int r = 0; r < N; r++) begin
+            for (int c = 0; c < N; c++) begin
+                A1[r][c]  = nz8(((r + c + 1) % 7) - 3);
+                B1[r][c]  = nz8(((r * 2 + c + 2) % 5) - 2);
+                IP1[r][c] = nz32(((r * 11 + c + 1) * 13) - 50);
+                A2[r][c]  = nz8(((r * 3 + c + 5) % 7) - 3);
+                B2[r][c]  = nz8(((r + c * 3 + 2) % 5) - 2);
+                IP2[r][c] = nz32(((r * 7 + c + 1) * 17) - 25);
             end
         end
-    endtask
+        compute_expected(A1, B1, IP1, C1_exp);
+        compute_expected(A2, B2, IP2, C2_exp);
 
-    // ========================================================
-    // 8) Initialize test data
-    // ========================================================
-    task automatic init_test_data;
+        disp_int8 (A1,  "A1");
+        disp_int8 (B1,  "B1");
+        disp_int32(IP1, "IP1");
+        disp_int8 (A2,  "A2");
+        disp_int8 (B2,  "B2");
+        disp_int32(IP2, "IP2");
+
+        repeat (RESET_HOLD_CYCLES) @(posedge clk);
+        rst = 1'b0;
+        repeat (POST_RST_SETTLE_CYCLES) @(posedge clk);
+
         begin
-            // Row 0
-            weight_matrix[0][0] =  1;  weight_matrix[0][1] =  2;  weight_matrix[0][2] =  3;  weight_matrix[0][3] =  4;
-            weight_matrix[0][4] = -1;  weight_matrix[0][5] =  0;  weight_matrix[0][6] =  1;  weight_matrix[0][7] =  2;
-
-            // Row 1
-            weight_matrix[1][0] =  0;  weight_matrix[1][1] =  1;  weight_matrix[1][2] =  0;  weight_matrix[1][3] = -1;
-            weight_matrix[1][4] =  2;  weight_matrix[1][5] =  3;  weight_matrix[1][6] = -2;  weight_matrix[1][7] =  1;
-
-            // Row 2
-            weight_matrix[2][0] =  2;  weight_matrix[2][1] =  0;  weight_matrix[2][2] =  1;  weight_matrix[2][3] =  0;
-            weight_matrix[2][4] =  1;  weight_matrix[2][5] = -1;  weight_matrix[2][6] =  2;  weight_matrix[2][7] =  0;
-
-            // Row 3
-            weight_matrix[3][0] = -1;  weight_matrix[3][1] =  1;  weight_matrix[3][2] =  2;  weight_matrix[3][3] =  1;
-            weight_matrix[3][4] =  0;  weight_matrix[3][5] =  2;  weight_matrix[3][6] =  1;  weight_matrix[3][7] = -1;
-
-            // Row 4
-            weight_matrix[4][0] =  3;  weight_matrix[4][1] = -2;  weight_matrix[4][2] =  1;  weight_matrix[4][3] =  2;
-            weight_matrix[4][4] =  1;  weight_matrix[4][5] =  0;  weight_matrix[4][6] = -1;  weight_matrix[4][7] =  2;
-
-            // Row 5
-            weight_matrix[5][0] =  1;  weight_matrix[5][1] =  1;  weight_matrix[5][2] = -1;  weight_matrix[5][3] =  0;
-            weight_matrix[5][4] =  2;  weight_matrix[5][5] =  1;  weight_matrix[5][6] =  0;  weight_matrix[5][7] =  1;
-
-            // Row 6
-            weight_matrix[6][0] =  0;  weight_matrix[6][1] =  2;  weight_matrix[6][2] =  1;  weight_matrix[6][3] = -2;
-            weight_matrix[6][4] =  1;  weight_matrix[6][5] =  3;  weight_matrix[6][6] =  1;  weight_matrix[6][7] =  0;
-
-            // Row 7
-            weight_matrix[7][0] =  2;  weight_matrix[7][1] =  1;  weight_matrix[7][2] =  0;  weight_matrix[7][3] =  1;
-            weight_matrix[7][4] = -1;  weight_matrix[7][5] =  2;  weight_matrix[7][6] =  2;  weight_matrix[7][7] =  3;
-
-            // Activation vector
-            activation_vector[0] =  1;
-            activation_vector[1] =  2;
-            activation_vector[2] = -1;
-            activation_vector[3] =  3;
-            activation_vector[4] =  0;
-            activation_vector[5] =  1;
-            activation_vector[6] =  2;
-            activation_vector[7] = -2;
-        end
-    endtask
-
-    // ========================================================
-    // 9) Compute expected results
-    // ========================================================
-    task automatic compute_expected_results;
-        logic signed [PSUM_WIDTH-1:0] temp_sum;
-        begin
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                temp_sum = '0;
-                for (int row = 0; row < ARRAY_SIZE; row++) begin
-                    temp_sum = temp_sum
-                             + ($signed(activation_vector[row]) * $signed(weight_matrix[row][col]));
-                end
-                expected_psums[col] = temp_sum;
-            end
-        end
-    endtask
-
-    // ========================================================
-    // 10) Pretty-print helpers
-    // ========================================================
-    task automatic print_weight_matrix;
-        begin
-            $display("");
-            $display("======================================================");
-            $display("Weight Matrix (row = PE row, col = PE column)");
-            $display("======================================================");
-            for (int row = 0; row < ARRAY_SIZE; row++) begin
-                $write("Row %0d : ", row);
-                for (int col = 0; col < ARRAY_SIZE; col++) begin
-                    $write("%4d ", weight_matrix[row][col]);
-                end
-                $write("\n");
-            end
-            $display("======================================================");
-            $display("");
-        end
-    endtask
-
-    task automatic print_activation_vector;
-        begin
-            $display("Activation Vector");
-            $display("======================================================");
-            for (int row = 0; row < ARRAY_SIZE; row++) begin
-                $display("activation_vector[%0d] = %0d", row, activation_vector[row]);
-            end
-            $display("======================================================");
-            $display("");
-        end
-    endtask
-
-    task automatic print_expected_outputs;
-        begin
-            $display("Expected Final Outputs");
-            $display("======================================================");
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                $display("expected_psums[%0d] = %0d", col, expected_psums[col]);
-            end
-            $display("======================================================");
-            $display("");
-        end
-    endtask
-
-    // ========================================================
-    // 11) Apply reset
-    // ========================================================
-    task automatic apply_reset;
-        begin
-            $display("[%0t] Applying reset...", $time);
-
-            rst_i = 1'b1;
-            clear_all_inputs();
-
-            repeat (10) @(posedge clk_i);
-
-            rst_i = 1'b0;
-
-            repeat (10) @(posedge clk_i);
-
-            $display("[%0t] Reset released. ready_o=%b output_valid=%b", $time, ready_o, output_valid);
-        end
-    endtask
-    
-    
-    
-    /*task automatic apply_reset;
-        begin
-            $display("[%0t] Applying reset...", $time);
-
-            rst_i = 1'b1;
-            clear_all_inputs();
-
-            repeat (4) @(posedge clk_i);
-
-            rst_i = 1'b0;
-
-            repeat (2) @(posedge clk_i);
-
-            $display("[%0t] Reset released.", $time);
-        end
-    endtask*/
-
-    // ========================================================
-    // 12) Load weights
-    // ========================================================
-    task automatic load_weights_into_array;
-        begin
-            $display("[%0t] Starting weight load...", $time);
-
-            //wait (ready_o == 1'b1);
-            wait_for_ready_with_timeout(100);
-            @(negedge clk_i);
-
-            // One extra compute cycle compensates for the first launch alignment
-            num_input_rows = ARRAY_SIZE + 1;
-
-            // Put row 0 on top boundary before start
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                top_data_i[col] = $signed(weight_matrix[0][col]);
-            end
-
-            // Start controller
-            start = 1'b1;
-            @(posedge clk_i);   // IDLE -> LOAD_WTS
-            @(negedge clk_i);
-            start = 1'b0;
-
-            // Hold row 0 for first real LOAD_WTS capture
-            @(posedge clk_i);
-            @(negedge clk_i);
-
-            // Stream rows 1..7
-            for (int row = 1; row < ARRAY_SIZE; row++) begin
-                for (int col = 0; col < ARRAY_SIZE; col++) begin
-                    top_data_i[col] = $signed(weight_matrix[row][col]);
-                end
-                @(posedge clk_i);
-                @(negedge clk_i);
-            end
-
-            // During compute, top boundary psums start from zero
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                top_data_i[col] = '0;
-            end
-
-            $display("[%0t] Weight load finished.", $time);
-        end
-    endtask
-
-    // ========================================================
-    // 13) Check loaded weights
-    // ========================================================
-    task automatic check_loaded_weights;
-        int mismatch_count;
-        begin
-            mismatch_count = 0;
-
-            $display("");
-            $display("Checking stored weights inside the PE array...");
-            $display("======================================================");
-
-            for (int row = 0; row < ARRAY_SIZE; row++) begin
-                for (int col = 0; col < ARRAY_SIZE; col++) begin
-                    if (weight_debug_o[row][col] !== weight_matrix[row][col]) begin
-                        $display("WEIGHT MISMATCH at PE(%0d,%0d): expected=%0d got=%0d",
-                                 row, col, weight_matrix[row][col], weight_debug_o[row][col]);
-                        mismatch_count++;
-                    end
+            int ready_wait_cycles;
+            ready_wait_cycles = 0;
+            while (ready_o !== 1'b1) begin
+                @(posedge clk);
+                ready_wait_cycles++;
+                if (ready_wait_cycles > READY_WAIT_LIMIT) begin
+                    $display("[%0t] ERROR: ready_o timeout (value=%b).", $time, ready_o);
+                    $display("[%0t] HINT: for gate-level, try longer reset or +initreg+0.", $time);
+                    $fatal(1, "ready_o did not assert");
                 end
             end
-
-            if (mismatch_count == 0) begin
-                $display("All PE weights loaded correctly.");
-            end
-            else begin
-                $display("Total weight mismatches = %0d", mismatch_count);
-            end
-
-            $display("======================================================");
-            $display("");
         end
-    endtask
-
-    // ========================================================
-    // 14) Drive one activation vector
-    // ========================================================
-    //
-    // Send row7 twice, then row6..row0.
-    // This compensates for the first external launch being lost
-    // before the PE-side valid fully lines up.
-    // ========================================================
-    task automatic drive_one_activation_vector;
-        begin
-            $display("[%0t] Applying one activation vector...", $time);
-
-            // Give the controller a couple of cycles to transition from load to compute
-            repeat (2) @(posedge clk_i);
-
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
-            @(posedge clk_i);
-
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
-            @(posedge clk_i);
-
-            for (int k = ARRAY_SIZE-2; k >= 0; k--) begin
-                @(negedge clk_i);
-                for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                    activations_i[rr] = '0;
-                end
-                activations_i[k] = activation_vector[k];
-                @(posedge clk_i);
-            end
-
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-
-            $display("[%0t] Activation vector launch complete.", $time);
-        end
-    endtask
-    
-    
-    
-    
-    
-    
-    /*task automatic drive_one_activation_vector;
-        begin
-            $display("[%0t] Applying one activation vector...", $time);
-
-            wait (dut.u_systolic_ctrl.input_valid_to_pe == 1'b1);
-
-            // Cycle 0: row 7
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
-            @(posedge clk_i);
-
-            // Cycle 1: row 7 again
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-            activations_i[ARRAY_SIZE-1] = activation_vector[ARRAY_SIZE-1];
-            @(posedge clk_i);
-
-            // Remaining cycles: row 6 down to row 0
-            for (int k = ARRAY_SIZE-2; k >= 0; k--) begin
-                @(negedge clk_i);
-
-                for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                    activations_i[rr] = '0;
-                end
-
-                activations_i[k] = activation_vector[k];
-
-                @(posedge clk_i);
-            end
-
-            @(negedge clk_i);
-            for (int rr = 0; rr < ARRAY_SIZE; rr++) begin
-                activations_i[rr] = '0;
-            end
-
-            $display("[%0t] Activation vector launch complete.", $time);
-        end
-    endtask */
-
-    // ========================================================
-    // 15) Capture results from compute start
-    // ========================================================
-    task automatic capture_results_from_compute_start;
-        localparam int SCAN_CYCLES = 12 * ARRAY_SIZE;
-        int start_wait;
-        begin
-            $display("[%0t] Waiting for output activity and scanning outputs...", $time);
-
-            for (int i = 0; i < ARRAY_SIZE; i++) begin
-                captured_final_psums[i] = '0;
-                captured_seen[i]        = 1'b0;
-                matched_seen[i]         = 1'b0;
-            end
-
-            // Wait up to some cycles for output_valid, but don't hang forever
-            start_wait = 0;
-            while ((output_valid !== 1'b1) && (start_wait < 100)) begin
-                @(posedge clk_i);
-                start_wait++;
-            end
-
-            $display("[%0t] Starting output scan. output_valid=%b after %0d cycles",
-                    $time, output_valid, start_wait);
-
-            repeat (SCAN_CYCLES) begin
-                @(negedge clk_i);
-                for (int i = 0; i < ARRAY_SIZE; i++) begin
-                    if (!matched_seen[i] && (final_psums_o[i] === expected_psums[i])) begin
-                        captured_final_psums[i] = final_psums_o[i];
-                        captured_seen[i]        = 1'b1;
-                        matched_seen[i]         = 1'b1;
-                    end
-                    else if (!matched_seen[i] && (final_psums_o[i] !== '0)) begin
-                        captured_final_psums[i] = final_psums_o[i];
-                        captured_seen[i]        = 1'b1;
-                    end
-                end
-                @(posedge clk_i);
-            end
-
-            $display("[%0t] Output scan finished.", $time);
-        end
-    endtask
-    
-    
-    
-    
-    /*task automatic capture_results_from_compute_start;
-        localparam int SCAN_CYCLES = 12 * ARRAY_SIZE;
-        begin
-            $display("[%0t] Waiting for COMPUTE and scanning outputs...", $time);
-
-            for (int i = 0; i < ARRAY_SIZE; i++) begin
-                captured_final_psums[i] = '0;
-                captured_seen[i]        = 1'b0;
-                matched_seen[i]         = 1'b0;
-            end
-
-            wait (dut.u_systolic_ctrl.input_valid_to_pe == 1'b1);
-
-            repeat (SCAN_CYCLES) begin
-                @(negedge clk_i);
-                for (int i = 0; i < ARRAY_SIZE; i++) begin
-                    if (!matched_seen[i] && (final_psums_o[i] === expected_psums[i])) begin
-                        captured_final_psums[i] = final_psums_o[i];
-                        captured_seen[i]        = 1'b1;
-                        matched_seen[i]         = 1'b1;
-                    end
-                    else if (!matched_seen[i] && (final_psums_o[i] !== '0)) begin
-                        captured_final_psums[i] = final_psums_o[i];
-                        captured_seen[i]        = 1'b1;
-                    end
-                end
-                @(posedge clk_i);
-            end
-
-            $display("[%0t] Output scan finished.", $time);
-        end
-    endtask*/
-
-    // ========================================================
-    // 16) Print captured outputs
-    // ========================================================
-    task automatic print_actual_outputs;
-        begin
-            $display("");
-            $display("Captured Final DUT Outputs");
-            $display("======================================================");
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                $display("captured_final_psums[%0d] = %0d  seen=%0b  matched=%0b",
-                         col, captured_final_psums[col], captured_seen[col], matched_seen[col]);
-            end
-            $display("======================================================");
-            $display("");
-        end
-    endtask
-
-    // ========================================================
-    // 17) Compare outputs
-    // ========================================================
-    task automatic check_final_results;
-        int mismatch_count;
-        begin
-            mismatch_count = 0;
-
-            $display("Comparing captured DUT outputs against expected values...");
-            $display("======================================================");
-
-            for (int col = 0; col < ARRAY_SIZE; col++) begin
-                if (!captured_seen[col]) begin
-                    $display("MISMATCH at output[%0d]: expected=%0d got=UNSEEN",
-                             col, expected_psums[col]);
-                    mismatch_count++;
-                end
-                else if (captured_final_psums[col] !== expected_psums[col]) begin
-                    $display("MISMATCH at output[%0d]: expected=%0d got=%0d",
-                             col, expected_psums[col], captured_final_psums[col]);
-                    mismatch_count++;
-                end
-                else begin
-                    $display("MATCH at output[%0d]: value=%0d",
-                             col, captured_final_psums[col]);
-                end
-            end
-
-            $display("======================================================");
-
-            if (mismatch_count == 0) begin
-                $display("TEST PASSED: all final outputs match expected values.");
-            end
-            else begin
-                $display("TEST FAILED: total output mismatches = %0d", mismatch_count);
-            end
-
-            $display("");
-        end
-    endtask
-
-    // ========================================================
-    // 18) Main test sequence
-    // ========================================================
-    initial begin
-        clear_all_inputs();
-        init_test_data();
-        compute_expected_results();
-
-        print_weight_matrix();
-        print_activation_vector();
-        print_expected_outputs();
-
-        apply_reset();
-        load_weights_into_array();
-        check_loaded_weights();
 
         fork
-            drive_one_activation_vector();
-            capture_results_from_compute_start();
+            begin
+                drive_load_wts(B1);
+                drive_compute_and_wavefront(A1, IP1);
+                pulse_start_only();
+                drive_shadow_weights(B2);
+                wait_for_shadow_drop();
+                repeat (2) @(posedge clk);
+                drive_compute_and_wavefront(A2, IP2);
+            end
+            begin
+                sample_results(C1_actual);
+                sample_results(C2_actual);
+            end
         join
 
-        print_actual_outputs();
-        check_final_results();
+        errors += compare(C1_actual, C1_exp, "C1");
+        errors += compare(C2_actual, C2_exp, "C2");
 
-        repeat (5) @(posedge clk_i);
+        if (errors == 0) $display("[%0t] *** ALL PASS ***", $time);
+        else             $display("[%0t] *** %0d ERRORS ***", $time, errors);
+
+        repeat (20) @(posedge clk);
         $finish;
     end
 
