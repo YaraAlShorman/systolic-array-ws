@@ -45,7 +45,7 @@ module PE #(
   // Weight Register
   // ----------------------------
 
-  always_ff @(posedge clk_i) begin
+  always_ff @(posedge clk_i or posedge rst_i) begin
     if (rst_i)
       weight_active <= '0;
     else if (v_i && b_is_weight_i)
@@ -72,13 +72,14 @@ module PE #(
   // ----------------------------
   // Register the horizontal data/valid hop so each PE-to-PE transfer is
   // one cycle, matching systolic timing and reducing long combinational paths.
-  always_ff @(posedge clk_i) begin
+  always_ff @(posedge clk_i or posedge rst_i) begin
     if (rst_i) begin
       a_o <= '0;
       v_o <= 1'b0;
+      b_o <= '0;
     end else begin
       a_o <= a_i;
-      v_o <= v_i;
+      v_o <= !b_is_weight_i ? v_i : 1'b0;
       if (mac_bypass | b_is_weight_i)
               b_o <= b_i;
       else

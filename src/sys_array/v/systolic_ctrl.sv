@@ -1,4 +1,5 @@
 // FSM controller for Systolic array
+// 
 //
 // Main FSM: IDLE -> LOAD_WTS (N) -> COMPUTE (N accepted beats) -> DRAIN (2N-1) -> WAIT_SHADOW / ...
 // From first COMPUTE cycle through end of DRAIN = N + (2N-1) = 3N-1 cycles per matmul.
@@ -82,9 +83,7 @@ module systolic_ctrl #(
 	assign start_rise = start & ~start_d;
 
 	logic shadow_load_window_open;
-	assign shadow_load_window_open = (main_state == WAIT_SHADOW);
-
-	assign ready_o = (main_state == IDLE) || (main_state == DRAIN);
+	assign shadow_load_window_open = (main_state == WAIT_SHADOW) || ((main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1)));
 
 	assign shadow_weights_active_o = (shadow_state == SHADOW_RUN);
 
@@ -92,12 +91,6 @@ module systolic_ctrl #(
 
 	assign load_pulse_o = (main_state == LOAD_WTS && counter == 16'(ARRAY_SIZE - 1))
 	                   || (shadow_state == SHADOW_RUN && sh_counter == 16'(ARRAY_SIZE - 1));
-
-	// Output rows are valid for exactly N cycles in DRAIN:
-	// counter = N-1, N, ... , 2N-2  (inclusive).
-	assign output_valid = (main_state == DRAIN)
-		&& (counter >= 16'(ARRAY_SIZE - 1))
-		&& (counter <= 16'(LATENCY - 1));
 
 	logic shadow_consume;
 	assign shadow_consume = shadow_feature_en && (main_state_next == COMPUTE)
@@ -114,8 +107,7 @@ module systolic_ctrl #(
 		next_counter = counter;
 		skew_en = 1'b0;
 		deskew_en = 1'b0;
-		input_valid_to_pe = 1'b0;
-
+                input_valid_to_pe = 1'b0;
 		case (main_state)
 			IDLE: begin
 				if (start_rise) begin
@@ -147,9 +139,8 @@ module systolic_ctrl #(
 			DRAIN: begin
 				skew_en = (counter < 16'(ARRAY_SIZE - 1));
 				deskew_en = 1'b1;
-				input_valid_to_pe = (counter < 16'(ARRAY_SIZE - 1));
 				if (counter == 16'(LATENCY - 1)) begin
-					if (!start && !start_pending) begin
+					if ((!start && !start_pending) || !shadow_feature_en) begin
 						main_state_next = IDLE;
 						next_counter = 16'b0;
 					end else if (shadow_feature_en && start_pending && shadow_ready) begin
@@ -169,7 +160,6 @@ module systolic_ctrl #(
 			WAIT_SHADOW: begin
 				skew_en = 1'b0;
 				deskew_en = 1'b1;
-				input_valid_to_pe = 1'b0;
 				if (shadow_feature_en && shadow_ready) begin
 					main_state_next = COMPUTE;
 					next_counter = 16'b0;
@@ -208,17 +198,20 @@ module systolic_ctrl #(
 		endcase
 	end
 	
-	always_ff @(posedge clk_i) begin
+	always_ff @(posedge clk_i or posedge rst_i) begin
 		if (rst_i) begin
 			main_state <= IDLE;
 			counter <= 16'b0;
 			start_pending <= 1'b0;
 			start_d <= 1'b0;
+			ready_o <= 1'b0;
+			output_valid <= 1'b0;
 		end else begin
 			main_state <= main_state_next;
 			counter <= next_counter;
 			start_d <= start;
-
+                        ready_o <= (main_state == IDLE) || ((main_state == DRAIN) && shadow_feature_en);
+			output_valid <= (main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1)); 
 			if (shadow_consume)
 				start_pending <= 1'b0;
 			else if (start_rise && (main_state != IDLE))
@@ -226,7 +219,7 @@ module systolic_ctrl #(
 		end
 	end
 
-	always_ff @(posedge clk_i) begin
+	always_ff @(posedge clk_i or posedge rst_i) begin
 		if (rst_i) begin
 			shadow_state <= SHADOW_IDLE;
 			sh_counter <= 16'b0;
@@ -252,7 +245,7 @@ module systolic_ctrl #(
 			end else if (i == 1) begin : one_delay
 				logic signed [DATA_WIDTH-1:0] shift_input_1;
 
-				always_ff @(posedge clk_i) begin
+				always_ff @(posedge clk_i or posedge rst_i) begin
 					if (rst_i)
 						shift_input_1 <= '0;
 					else if (skew_en)
@@ -265,7 +258,7 @@ module systolic_ctrl #(
 			end else begin : multi_delay
 				logic signed [DATA_WIDTH-1:0] shift_input [0:i-1];
 
-				always_ff @(posedge clk_i) begin
+				always_ff @(posedge clk_i or posedge rst_i) begin
 					if (rst_i) begin
 						for (int j = 0; j < i; j++) begin
 							shift_input[j] <= '0;
@@ -296,7 +289,7 @@ module systolic_ctrl #(
 			if (DELAY == 1) begin : one_stage
 				logic signed [PSUM_WIDTH-1:0] shift_output_1;
 
-				always_ff @(posedge clk_i) begin
+				always_ff @(posedge clk_i or posedge rst_i) begin
 					if (rst_i)
 						shift_output_1 <= '0;
 					else if (deskew_en)
@@ -309,7 +302,7 @@ module systolic_ctrl #(
 			end else begin : multi_stage
 				logic signed [PSUM_WIDTH-1:0] shift_output [DELAY];
 
-				always_ff @(posedge clk_i) begin
+				always_ff @(posedge clk_i or posedge rst_i) begin
 					if (rst_i) begin
 						for (int m = 0; m < DELAY; m++) begin
 							shift_output[m] <= '0;

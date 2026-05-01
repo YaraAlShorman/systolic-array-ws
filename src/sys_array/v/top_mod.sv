@@ -31,6 +31,8 @@ module top_mod #(
     logic b_is_weight;
     logic input_valid_to_pe;
     logic load_pulse;
+    logic [ARRAY_SIZE-1:0] b_is_weight_row;
+    logic [$clog2(ARRAY_SIZE)-1:0] b_is_weight_ctr;
 //***AREA EXP START***
 /*
     // ------------------------------------------------------------
@@ -53,11 +55,26 @@ module top_mod #(
 */
     logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_skewed;
     logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psums_staggered;
-
+    logic [ARRAY_SIZE-1:0] v_first_col_skewed;
     logic signed [DATA_WIDTH-1:0] a_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic                         v_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic signed [PSUM_WIDTH-1:0] b_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
 
+    always_ff @(posedge clk_i or posedge rst_i) begin
+        if (rst_i) begin
+            b_is_weight_ctr <= '0;
+        end else if (!b_is_weight) begin
+            b_is_weight_ctr <= '0;
+        end else if (b_is_weight_ctr != ARRAY_SIZE-1) begin
+            b_is_weight_ctr <= b_is_weight_ctr + 1'b1;
+        end
+    end
+
+    generate
+        for (genvar br = 0; br < ARRAY_SIZE; br++) begin : GEN_BISW_ROW
+            assign b_is_weight_row[br] = b_is_weight && (b_is_weight_ctr >= br);
+        end
+    endgenerate
 //***AREA EXP START***
 /*
     always_ff @(posedge clk_i) begin
@@ -124,6 +141,27 @@ module top_mod #(
         .load_pulse_o         (load_pulse)
     );
 
+    // Skew valid into first PE column so row-r asserts r cycles after row-0.
+    genvar vr;
+    generate
+        for (vr = 0; vr < ARRAY_SIZE; vr++) begin : GEN_V_SKEW
+            if (vr == 0) begin : V_NO_DELAY
+                assign v_first_col_skewed[vr] = input_valid_to_pe;
+            end else begin : V_WITH_DELAY
+                logic v_shift [0:vr-1];
+                always_ff @(posedge clk_i or posedge rst_i) begin
+                    if (rst_i) begin
+                        for (int j = 0; j < vr; j++) v_shift[j] <= 1'b0;
+                    end else if (input_valid_to_pe) begin
+                        v_shift[0] <= input_valid_to_pe;
+                        for (int j = 1; j < vr; j++) v_shift[j] <= v_shift[j-1];
+                    end
+                end
+                assign v_first_col_skewed[vr] = v_shift[vr-1];
+            end
+        end
+    endgenerate
+
     genvar r, c;
     generate
         for (r = 0; r < ARRAY_SIZE; r++) begin : ROW_GEN
@@ -135,10 +173,10 @@ module top_mod #(
 
                 if (c == 0) begin : LEFT_EDGE
                     assign a_in_local = activations_skewed[r];
-                    assign v_in_local = (b_is_weight) ? load_pulse : input_valid_to_pe;
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];
                 end else begin : INTERNAL_LEFT
                     assign a_in_local = a_link[r][c-1];
-                    assign v_in_local = (b_is_weight) ? load_pulse : v_link[r][c-1];
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];
                 end
 
                 if (r == 0) begin : TOP_EDGE
@@ -160,7 +198,7 @@ module top_mod #(
                     .mac_bypass_i       (mac_bypass_i),
                     .a_i                (a_in_local),
                     .b_i                (b_in_local),
-                    .b_is_weight_i      (b_is_weight),
+                    .b_is_weight_i      (b_is_weight_row[r]),
                     .v_o                (v_link[r][c]),
                     .a_o                (a_link[r][c]),
                     .b_o                (b_link[r][c]),
