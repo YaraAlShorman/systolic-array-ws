@@ -1,256 +1,214 @@
 // ============================================================
 // Top-level 8x8 weight-stationary systolic array
-//
-// This module connects together:
-// 1) The systolic controller (FSM + input skew + output de-skew)
-// 2) The 64 PE instances (8 rows x 8 columns)
-// 3) The internal horizontal and vertical wires
-//
-// ------------------------------------------------------------
-// DATAFLOW SUMMARY
-// ------------------------------------------------------------
-// - Activations enter from the LEFT side of the array
-// - The controller skews those activations in time
-// - Each PE passes activation horizontally to the RIGHT
-//
-// - Vertical data enters from the TOP of the array
-// - During LOAD_WTS, top_data_i carries WEIGHTS
-// - During COMPUTE, top_data_i usually carries initial PSUMS
-//   (most often zeros)
-//
-// - Each PE passes vertical data DOWNWARD
-// - The bottom row outputs are still time-staggered
-// - The controller de-skews them into final_psums_o
-//
-// ------------------------------------------------------------
-// WHY THIS MATCHES YOUR REPORT
-// ------------------------------------------------------------
-// - PEs store weights locally during weight load
-// - Activations move horizontally
-// - Weights / psums share vertical datapath
-// - Controller has IDLE / LOAD_WTS / COMPUTE / DRAIN
-// - Shift registers skew inputs and de-skew outputs
 // ------------------------------------------------------------
 
 module top_mod #(
     parameter ARRAY_SIZE  = 8,
     parameter DATA_WIDTH  = 8,
     parameter PSUM_WIDTH  = 32,
-    parameter ENABLE_MAC_BYPASS = 1
+    parameter ENABLE_MAC_BYPASS = 0
 )(
     input  logic clk_i,
     input  logic rst_i,
     input  logic start,
+    input  logic activations_valid_i,
 
-    // Number of activation rows / valid compute cycles
-    input  logic [15:0] num_input_rows,
-
-    // Left boundary activations into the array
-    // One activation stream per row
     input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
 
-    // Top boundary vertical inputs into the array
-    // During LOAD_WTS: these carry weights in b_i[7:0]
-    // During COMPUTE : these carry incoming psums (usually zeros at top boundary)
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] top_data_i,
 
-    // Optional global MAC bypass control
     input  logic mac_bypass_i,
 
-    // Final, de-skewed outputs from the controller
     output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o,
 
-    // Control/status outputs
     output logic ready_o,
+    output logic shadow_weights_active_o,
     output logic output_valid,
 
-    // Optional debug: stored weight in every PE
     output logic signed [ARRAY_SIZE-1:0][ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_debug_o
 );
 
-    // ========================================================
-    // 1) Signals between controller and PE array
-    // ========================================================
-
-    // Controller tells PEs whether vertical data is weight or psum
     logic b_is_weight;
-
-    // Controller tells array whether input stream is valid
     logic input_valid_to_pe;
-
-    // Controller outputs skewed activations (already delayed row-by-row)
+    logic load_pulse;
+    logic [ARRAY_SIZE-1:0] b_is_weight_row;
+    logic [$clog2(ARRAY_SIZE)-1:0] b_is_weight_ctr;
+//***AREA EXP START***
+/*
+    // ------------------------------------------------------------
+    // Dummy storage block for area estimation only:
+    //   - 10 deep x 80b FIFO
+    //   - 2KiB (256 x 64b) data memory
+    // Kept active and sunk locally so synthesis cannot prune it.
+    // ------------------------------------------------------------
+    logic [63:0] area_scratch_addr;
+    logic [63:0] area_scratch_data;
+    logic        area_push;
+    logic        area_pop;
+    logic        area_dmem_we;
+    logic [63:0] area_dmem_rdata;
+    logic [79:0] area_ififo_rdata;
+    logic [79:0] area_sink_ff;
+    logic signed [ARRAY_SIZE-1:0][ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_debug_raw;
+    logic [63:0] area_storage_digest;
+    //***AREA EXP END***
+*/
     logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_skewed;
-
-    // Bottom-row staggered outputs go into controller
     logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psums_staggered;
-
-    // ========================================================
-    // 1A) Row-select valid for weight loading
-    // ========================================================
-    //
-    // During LOAD_WTS, the PE vertical weight path is combinational:
-    //    b_o = b_i
-    //
-    // So all rows in a column see the same top_data_i[c] in the same cycle.
-    // To load different weights into different rows, exactly ONE row must
-    // be enabled per LOAD_WTS cycle.
-    //
-    // load_row_idx selects which row captures the current top_data_i values.
-    // ========================================================
-
-    logic                                 b_is_weight_d;
-    logic [$clog2(ARRAY_SIZE)-1:0]        load_row_idx;
-    logic [ARRAY_SIZE-1:0]                load_valid_by_row;
-
-    always_ff @(posedge clk_i or posedge rst_i) begin
-        if (rst_i) begin
-            b_is_weight_d <= 1'b0;
-            load_row_idx  <= '0;
-        end
-        else begin
-            // register previous-cycle LOAD_WTS state
-            b_is_weight_d <= b_is_weight;
-
-            if (!b_is_weight) begin
-                // Outside LOAD_WTS, reset index
-                load_row_idx <= '0;
-            end
-            else if (!b_is_weight_d) begin
-                // First real LOAD_WTS cycle uses row 0 now,
-                // so prepare row 1 for the next cycle
-                if (ARRAY_SIZE > 1)
-                    load_row_idx <= 1;
-                else
-                    load_row_idx <= '0;
-            end
-            else begin
-                // Advance one row per LOAD_WTS cycle
-                if (load_row_idx < ARRAY_SIZE-1)
-                    load_row_idx <= load_row_idx + 1'b1;
-            end
-        end
-    end
-
-    always_comb begin
-        load_valid_by_row = '0;
-        if (b_is_weight)
-            load_valid_by_row[load_row_idx] = 1'b1;
-    end
-
-    // ========================================================
-    // 2) Internal interconnect inside the PE mesh
-    // ========================================================
-    //
-    // a_link[r][c] = activation output from PE at row r, col c
-    // v_link[r][c] = valid output from PE at row r, col c
-    // b_link[r][c] = vertical output from PE at row r, col c
-    //
-    // These are INTERNAL wires between PEs.
-    // ========================================================
-
+    logic [ARRAY_SIZE-1:0] v_first_col_skewed;
     logic signed [DATA_WIDTH-1:0] a_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic                         v_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic signed [PSUM_WIDTH-1:0] b_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
 
-    // ========================================================
-    // 3) Instantiate the controller
-    // ========================================================
+    always_ff @(posedge clk_i or posedge rst_i) begin
+        if (rst_i) begin
+            b_is_weight_ctr <= '0;
+        end else if (!b_is_weight) begin
+            b_is_weight_ctr <= '0;
+        end else if (b_is_weight_ctr != ARRAY_SIZE-1) begin
+            b_is_weight_ctr <= b_is_weight_ctr + 1'b1;
+        end
+    end
+
+    generate
+        for (genvar br = 0; br < ARRAY_SIZE; br++) begin : GEN_BISW_ROW
+            assign b_is_weight_row[br] = b_is_weight && (b_is_weight_ctr >= br);
+        end
+    endgenerate
+//***AREA EXP START***
+/*
+    always_ff @(posedge clk_i) begin
+        if (rst_i) begin
+            area_scratch_addr <= 64'h1;
+            area_scratch_data <= 64'h1;
+            area_push         <= 1'b0;
+            area_pop          <= 1'b0;
+            area_dmem_we      <= 1'b0;
+            area_sink_ff      <= '0;
+        end else begin
+            // Non-constant toggling keeps the storage paths exercised.
+            area_scratch_addr <= area_scratch_addr + 64'h9E37_79B9_7F4A_7C15;
+            area_scratch_data <= {area_scratch_data[62:0],
+                                  area_scratch_data[63]
+                                ^ area_scratch_addr[0]
+                                ^ area_scratch_addr[7]
+                                ^ top_data_i[0][0]
+                                ^ top_data_i[1][0]
+                                ^ area_ififo_rdata[0]
+                                ^ area_dmem_rdata[0]};  
+            area_push         <= area_scratch_addr[0];
+            area_pop          <= area_scratch_addr[1];
+            area_dmem_we      <= ~area_dmem_we;
+            area_sink_ff      <= area_ififo_rdata
+                               ^ {16'd0, area_dmem_rdata}
+                               ^ {79'd0, area_scratch_addr[0]};
+        end
+    end
+
+    systolic_area_storage u_area_storage (
+        .clk_i         (clk_i),
+        .rst_i         (rst_i),
+        .scratch_addr_i(area_scratch_addr),
+        .scratch_data_i(area_scratch_data),
+        .push_i        (area_push),
+        .pop_i         (area_pop),
+        .dmem_we_i     (area_dmem_we),
+        .dmem_rdata_o  (area_dmem_rdata),
+        .ififo_rdata_o (area_ififo_rdata),
+        .storage_digest_o(area_storage_digest)
+    );
+    */
+//***AREA EXP END***
 
     systolic_ctrl #(
         .ARRAY_SIZE (ARRAY_SIZE),
         .DATA_WIDTH (DATA_WIDTH),
         .PSUM_WIDTH (PSUM_WIDTH)
     ) u_systolic_ctrl (
-        .clk_i               (clk_i),
-        .rst_i               (rst_i),
-        .start               (start),
-        .num_input_rows      (num_input_rows),
-        .activations_i       (activations_i),
-        .psums_staggered_i   (psums_staggered),
-        .activations_skewed_o(activations_skewed),
-        .final_psums_o       (final_psums_o),
-        .b_is_weight         (b_is_weight),
-        .input_valid_to_pe   (input_valid_to_pe),
-        .ready_o             (ready_o),
-        .output_valid        (output_valid)
+        .clk_i                (clk_i),
+        .rst_i                (rst_i),
+        .start                (start),
+        .activations_valid_i  (activations_valid_i),
+        .activations_i        (activations_i),
+        .psums_staggered_i    (psums_staggered),
+        .activations_skewed_o (activations_skewed),
+        .final_psums_o        (final_psums_o),
+        .b_is_weight          (b_is_weight),
+        .input_valid_to_pe    (input_valid_to_pe),
+        .ready_o              (ready_o),
+        .shadow_weights_active_o (shadow_weights_active_o),
+        .output_valid         (output_valid),
+        .load_pulse_o         (load_pulse)
     );
 
-    // ========================================================
-    // 4) Instantiate the 64 PEs using nested generate loops
-    // ========================================================
+    // Skew valid into first PE column so row-r asserts r cycles after row-0.
+    genvar vr;
+    generate
+        for (vr = 0; vr < ARRAY_SIZE; vr++) begin : GEN_V_SKEW
+            if (vr == 0) begin : V_NO_DELAY
+                assign v_first_col_skewed[vr] = input_valid_to_pe;
+            end else begin : V_WITH_DELAY
+                logic v_shift [0:vr-1];
+                always_ff @(posedge clk_i or posedge rst_i) begin
+                    if (rst_i) begin
+                        for (int j = 0; j < vr; j++) v_shift[j] <= 1'b0;
+                    end else if (input_valid_to_pe) begin
+                        v_shift[0] <= input_valid_to_pe;
+                        for (int j = 1; j < vr; j++) v_shift[j] <= v_shift[j-1];
+                    end
+                end
+                assign v_first_col_skewed[vr] = v_shift[vr-1];
+            end
+        end
+    endgenerate
 
     genvar r, c;
     generate
         for (r = 0; r < ARRAY_SIZE; r++) begin : ROW_GEN
             for (c = 0; c < ARRAY_SIZE; c++) begin : COL_GEN
 
-                // --------------------------------------------
-                // Local wires going INTO this PE
-                // --------------------------------------------
                 logic signed [DATA_WIDTH-1:0] a_in_local;
                 logic                         v_in_local;
                 logic signed [PSUM_WIDTH-1:0] b_in_local;
 
-                // --------------------------------------------
-                // Activation input selection
-                // --------------------------------------------
-                // During LOAD_WTS:
-                //   use one-hot row load valid
-                //
-                // During COMPUTE:
-                //   first column gets input_valid_to_pe
-                //   other columns get valid from PE on the left
-                // --------------------------------------------
                 if (c == 0) begin : LEFT_EDGE
                     assign a_in_local = activations_skewed[r];
-                    assign v_in_local = (b_is_weight) ? load_valid_by_row[r]: input_valid_to_pe;
-                end
-                else begin : INTERNAL_LEFT
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];
+                end else begin : INTERNAL_LEFT
                     assign a_in_local = a_link[r][c-1];
-                    assign v_in_local = (b_is_weight) ? load_valid_by_row[r]: v_link[r][c-1];
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];
                 end
 
-                // --------------------------------------------
-                // Vertical input selection
-                // --------------------------------------------
-                // First row gets top boundary data from top_data_i
-                // Other rows get vertical data from PE above
-                // --------------------------------------------
                 if (r == 0) begin : TOP_EDGE
                     assign b_in_local = top_data_i[c];
-                end
-                else begin : INTERNAL_TOP
+                end else begin : INTERNAL_TOP
                     assign b_in_local = b_link[r-1][c];
                 end
 
-                // --------------------------------------------
-                // Instantiate one PE
-                // --------------------------------------------
                 PE #(
                     .ENABLE_MAC_BYPASS (ENABLE_MAC_BYPASS),
-                    .ROW_ID            (r),
+                    .DATA_WIDTH        (DATA_WIDTH),
+                    .PSUM_WIDTH        (PSUM_WIDTH),
+		    .ROW_ID            (r),
                     .COL_ID            (c)
                 ) u_pe (
-                    .clk_i         (clk_i),
-                    .rst_i         (rst_i),
-                    .v_i           (v_in_local),
-                    .mac_bypass_i  (mac_bypass_i),
-                    .a_i           (a_in_local),
-                    .b_i           (b_in_local),
-                    .b_is_weight_i (b_is_weight),
-                    .v_o           (v_link[r][c]),
-                    .a_o           (a_link[r][c]),
-                    .b_o           (b_link[r][c]),
-                    .weight_o      (weight_debug_o[r][c])
-                );
+                    .clk_i              (clk_i),
+                    .rst_i              (rst_i),
+                    .v_i                (v_in_local),
+                    .mac_bypass_i       (mac_bypass_i),
+                    .a_i                (a_in_local),
+                    .b_i                (b_in_local),
+                    .b_is_weight_i      (b_is_weight_row[r]),
+                    .v_o                (v_link[r][c]),
+                    .a_o                (a_link[r][c]),
+                    .b_o                (b_link[r][c]),
+     //               .weight_o           (weight_debug_raw[r][c]) //AREA EXP
+                    .weight_o           (weight_debug_o[r][c])
+        	 );
 
             end
         end
     endgenerate
-
-    // ========================================================
-    // 5) Connect bottom row outputs back into the controller
-    // ========================================================
 
     generate
         for (c = 0; c < ARRAY_SIZE; c++) begin : BOTTOM_CAPTURE
@@ -258,11 +216,25 @@ module top_mod #(
         end
     endgenerate
 
+//***AREA EXP START***
+/*
+    // Make area-probe logic observable at a top-level output so synthesis
+    // cannot prune the dummy storage cone as "unused".
+    always_comb begin
+        weight_debug_o = weight_debug_raw;
+       // weight_debug_o[0][0][0] = weight_debug_raw[0][0][0] ^ area_sink_ff[0];
+        // Route digest + sink into top-level observable output bits so every
+        // storage bit is in an externally visible cone.
+        weight_debug_o[0][0] = weight_debug_raw[0][0] ^ area_storage_digest[7:0];
+        weight_debug_o[0][1] = weight_debug_raw[0][1] ^ area_storage_digest[15:8];
+        weight_debug_o[0][2] = weight_debug_raw[0][2] ^ area_storage_digest[23:16];
+        weight_debug_o[0][3] = weight_debug_raw[0][3] ^ area_storage_digest[31:24];
+        weight_debug_o[0][4] = weight_debug_raw[0][4] ^ area_storage_digest[39:32];
+        weight_debug_o[0][5] = weight_debug_raw[0][5] ^ area_storage_digest[47:40];
+        weight_debug_o[0][6] = weight_debug_raw[0][6] ^ area_storage_digest[55:48];
+        weight_debug_o[0][7] = weight_debug_raw[0][7] ^ area_storage_digest[63:56];
+        weight_debug_o[1][0][0] = weight_debug_raw[1][0][0] ^ area_sink_ff[0];
+    end
+*/
+//***AREA EXP END***
 endmodule
-
-
-
-
-
-
-
