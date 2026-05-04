@@ -42,6 +42,32 @@ module PE_tb;
   logic signed [31:0] pe_b_o;
   logic signed [7:0] pe_weight_o;
 
+  // WS-TB start: drive new PE ports for double-buffer.
+  // d_i is routed from the lower 8 bits of pe_b_i so the legacy trace ROM
+  // (which carries the weight in the b_i field during b_is_weight=1 cycles)
+  // works unchanged; the difference is purely structural — load now lands in
+  // the inactive buffer instead of overwriting weight_active.
+  // prop_i flips on the falling edge of b_is_weight, mimicking the FSM rule
+  // "flip prop on transition from load into compute". For trace patterns that
+  // alternate load/compute/load/compute, this puts the freshly loaded buffer
+  // active for the immediately following compute cycle.
+  logic pe_prop_i;
+  logic pe_b_is_weight_d;
+  logic signed [7:0] pe_d_i;
+  logic signed [7:0] pe_d_o;
+  assign pe_d_i = pe_b_i[7:0];
+  always_ff @(posedge clk or posedge reset) begin
+    if (reset) begin
+      pe_prop_i        <= 1'b0;
+      pe_b_is_weight_d <= 1'b0;
+    end else begin
+      pe_b_is_weight_d <= pe_b_is_weight_i;
+      if (pe_b_is_weight_d && !pe_b_is_weight_i)
+        pe_prop_i <= ~pe_prop_i;
+    end
+  end
+  // WS-TB end
+
   // Buffered output for trace replay
   logic dut_v_r;
   logic [42:0] dut_data_lo;	// ## 43-bit payload from DUT
@@ -98,6 +124,10 @@ module PE_tb;
     ,.a_i	   ( pe_a_i )
     ,.b_i	   ( pe_b_i )
     ,.b_is_weight_i( pe_b_is_weight_i )
+
+    ,.d_i          ( pe_d_i )                            // WS-TB: weight stream (low 8b of legacy b_i)
+    ,.d_o          ( pe_d_o )                            // WS-TB: dangling, not checked
+    ,.prop_i       ( pe_prop_i )                         // WS-TB: ping-pong selector
 
     ,.v_o	   ( pe_v_o )
     ,.a_o	   ( pe_a_o )

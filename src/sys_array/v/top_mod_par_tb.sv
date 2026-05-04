@@ -47,6 +47,15 @@ module top_mod_par_tb;
     assign tb_top_data_i    = top_data_i;
     assign final_psums_o    = tb_final_psums_o;
 
+    // WS-TB start: derive top_weight_i from top_data_i low 8 bits (see top_mod_tb.sv)
+    logic signed [N-1:0][DATA_WIDTH-1:0]  tb_top_weight_i;
+    generate
+      for (genvar wc2 = 0; wc2 < N; wc2++) begin : GEN_TOP_WEIGHT_PAR
+        assign tb_top_weight_i[wc2] = tb_top_data_i[wc2][DATA_WIDTH-1:0];
+      end
+    endgenerate
+    // WS-TB end
+
     top_mod #(
         .ARRAY_SIZE       (N),
         .DATA_WIDTH       (DATA_WIDTH),
@@ -80,6 +89,17 @@ module top_mod_par_tb;
         .\top_data_i[5] (tb_top_data_i[5]),
         .\top_data_i[6] (tb_top_data_i[6]),
         .\top_data_i[7] (tb_top_data_i[7]),
+
+        // WS-TB start: weight wire (alias from top_data_i low 8 bits)
+        .\top_weight_i[0] (tb_top_weight_i[0]),
+        .\top_weight_i[1] (tb_top_weight_i[1]),
+        .\top_weight_i[2] (tb_top_weight_i[2]),
+        .\top_weight_i[3] (tb_top_weight_i[3]),
+        .\top_weight_i[4] (tb_top_weight_i[4]),
+        .\top_weight_i[5] (tb_top_weight_i[5]),
+        .\top_weight_i[6] (tb_top_weight_i[6]),
+        .\top_weight_i[7] (tb_top_weight_i[7]),
+        // WS-TB end
 
         .\final_psums_o[0] (tb_final_psums_o[0]),
         .\final_psums_o[1] (tb_final_psums_o[1]),

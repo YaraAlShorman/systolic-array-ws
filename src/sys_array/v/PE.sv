@@ -27,16 +27,26 @@ module PE #(
 
   input  logic signed [DATA_WIDTH-1:0]  a_i,
   input  logic signed [PSUM_WIDTH-1:0] b_i,
-  input  logic               b_is_weight_i,
+  input  logic               b_is_weight_i,           // WS-PE: now gates d_i load (was: gated b_i load)
+
+  // WS-PE start: separate weight stream + propagate selector (Gemmini double-buffer)
+  input  logic signed [DATA_WIDTH-1:0]  d_i,          // WS-PE: weight stream input (was sharing b_i)
+  output logic signed [DATA_WIDTH-1:0]  d_o,          // WS-PE: weight stream output (registered, like b_o)
+  input  logic                          prop_i,       // WS-PE: 0=c1_r active, 1=c2_r active
+  // WS-PE end
 
   output logic               v_o,
   output logic signed [DATA_WIDTH-1:0]  a_o,
   output logic signed [PSUM_WIDTH-1:0] b_o,
-  output logic signed [DATA_WIDTH-1:0] weight_o 	// debug stored weight
+  output logic signed [DATA_WIDTH-1:0] weight_o 	// debug stored weight (now: active buffer)
 );
 
   logic               mac_bypass;
-  logic signed [DATA_WIDTH-1:0]  weight_active;
+  logic signed [DATA_WIDTH-1:0]  weight_active;       // WS-PE: now combinational mux over c1_r/c2_r (was a flip-flop)
+  // WS-PE start: ping-pong weight buffers (replaces single weight_active register)
+  logic signed [DATA_WIDTH-1:0]  c1_r;                // WS-PE: weight buffer 1 (active when prop_i=0)
+  logic signed [DATA_WIDTH-1:0]  c2_r;                // WS-PE: weight buffer 2 (active when prop_i=1)
+  // WS-PE end
   logic signed [15:0] mult16b;
   logic signed [31:0] mult32b;		// sign extended product
   logic signed [PSUM_WIDTH-1:0] acc;	        // accumulated psum
@@ -45,12 +55,34 @@ module PE #(
   // Weight Register
   // ----------------------------
 
+  // WS-PE start: ping-pong load. Active buffer is held; inactive buffer is the load target.
+  //   prop_i = 0 -> c1_r is active for MAC, c2_r receives d_i (when v_i & b_is_weight_i)
+  //   prop_i = 1 -> c2_r is active for MAC, c1_r receives d_i
+  // Reference: Gemmini PE.scala WS path (lines 118-131). The load gate b_is_weight_i
+  // is retained as-is; the change is (a) source of weight is d_i (dedicated wire),
+  // (b) target is INACTIVE buffer instead of overwriting the in-use weight.
+  //
+  // Original single-buffer load (commented out, see modification_log.md):
+  // always_ff @(posedge clk_i or posedge rst_i) begin
+  //   if (rst_i)
+  //     weight_active <= '0;
+  //   else if (v_i && b_is_weight_i)
+  //     weight_active <= b_i[DATA_WIDTH-1:0];
+  // end
   always_ff @(posedge clk_i or posedge rst_i) begin
-    if (rst_i)
-      weight_active <= '0;
-    else if (v_i && b_is_weight_i)
-      weight_active <= b_i[DATA_WIDTH-1:0];
+    if (rst_i) begin
+      c1_r <= '0;
+      c2_r <= '0;
+    end else if (v_i && b_is_weight_i) begin
+      if (prop_i)
+        c1_r <= d_i;                                  // prop=1 -> c2 active, load c1 from d_i
+      else
+        c2_r <= d_i;                                  // prop=0 -> c1 active, load c2 from d_i
+    end
   end
+
+  assign weight_active = prop_i ? c2_r : c1_r;
+  // WS-PE end
 
   // ----------------------------
   // MAC Bypass Control
@@ -77,6 +109,7 @@ module PE #(
       a_o <= '0;
       v_o <= 1'b0;
       b_o <= '0;
+      d_o <= '0;                                                 // WS-PE: register d_o (relay weight stream down)
     end else begin
       a_o <= a_i;
       v_o <= !b_is_weight_i ? v_i : 1'b0;
@@ -84,6 +117,7 @@ module PE #(
               b_o <= b_i;
       else
               b_o <= acc;
+      d_o <= d_i;                                                // WS-PE: 1-cycle relay to next PE down (matches b_o timing)
     end
   end
 

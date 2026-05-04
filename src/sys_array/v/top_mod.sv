@@ -17,6 +17,9 @@ module top_mod #(
 
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] top_data_i,
 
+    // WS-TOP: dedicated weight-stream input (was: sharing top_data_i with psum bias)
+    input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] top_weight_i,
+
     input  logic mac_bypass_i,
 
     output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o,
@@ -59,6 +62,8 @@ module top_mod #(
     logic signed [DATA_WIDTH-1:0] a_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic                         v_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic signed [PSUM_WIDTH-1:0] b_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
+    logic signed [DATA_WIDTH-1:0] d_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];   // WS-TOP: vertical weight-stream link between PEs
+    logic                         prop;                                      // WS-TOP: ping-pong selector from systolic_ctrl
 
     always_ff @(posedge clk_i or posedge rst_i) begin
         if (rst_i) begin
@@ -138,7 +143,8 @@ module top_mod #(
         .ready_o              (ready_o),
         .shadow_weights_active_o (shadow_weights_active_o),
         .output_valid         (output_valid),
-        .load_pulse_o         (load_pulse)
+        .load_pulse_o         (load_pulse),
+        .prop_o               (prop)                                          // WS-TOP: ping-pong selector
     );
 
     // Skew valid into first PE column so row-r asserts r cycles after row-0.
@@ -170,6 +176,7 @@ module top_mod #(
                 logic signed [DATA_WIDTH-1:0] a_in_local;
                 logic                         v_in_local;
                 logic signed [PSUM_WIDTH-1:0] b_in_local;
+                logic signed [DATA_WIDTH-1:0] d_in_local;                                // WS-TOP: weight-stream input per PE
 
                 if (c == 0) begin : LEFT_EDGE
                     assign a_in_local = activations_skewed[r];
@@ -181,8 +188,10 @@ module top_mod #(
 
                 if (r == 0) begin : TOP_EDGE
                     assign b_in_local = top_data_i[c];
+                    assign d_in_local = top_weight_i[c];                                 // WS-TOP: top row pulls weights from external
                 end else begin : INTERNAL_TOP
                     assign b_in_local = b_link[r-1][c];
+                    assign d_in_local = d_link[r-1][c];                                  // WS-TOP: vertical weight chain
                 end
 
                 PE #(
@@ -199,6 +208,9 @@ module top_mod #(
                     .a_i                (a_in_local),
                     .b_i                (b_in_local),
                     .b_is_weight_i      (b_is_weight_row[r]),
+                    .d_i                (d_in_local),                                    // WS-TOP: weight stream in
+                    .d_o                (d_link[r][c]),                                  // WS-TOP: weight stream out
+                    .prop_i              (prop),                                         // WS-TOP: shared ping-pong selector
                     .v_o                (v_link[r][c]),
                     .a_o                (a_link[r][c]),
                     .b_o                (b_link[r][c]),

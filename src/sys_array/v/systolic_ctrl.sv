@@ -42,7 +42,11 @@ module systolic_ctrl #(
 	output logic ready_o,
 	output logic shadow_weights_active_o,
 	output logic output_valid,
-	output logic load_pulse_o
+	output logic load_pulse_o,
+	// WS-CTRL: ping-pong selector (Gemmini double-buffer).
+	// Flips on every transition into COMPUTE so the just-loaded inactive
+	// buffer becomes the active weight for the new matmul.
+	output logic prop_o
 );
 
 	// 1 disables parallel shadow weight load; drive from CSR / tie here (not a top_mod port).
@@ -71,6 +75,14 @@ module systolic_ctrl #(
 
 	logic [15:0] counter, next_counter;
 	logic [15:0] sh_counter, sh_counter_next;
+
+	// WS-CTRL: ping-pong selector register.
+	// Flips on transition INTO COMPUTE: LOAD_WTS->COMPUTE, DRAIN->COMPUTE
+	// (with shadow_ready), or WAIT_SHADOW->COMPUTE. The just-loaded inactive
+	// buffer becomes active for the new matmul. After reset prop_r=0, so the
+	// first LOAD_WTS streams into c2_r (inactive when prop=0); first flip
+	// makes prop=1 and c2_r becomes active for the first COMPUTE.
+	logic prop_r;
 
 	logic start_pending;
 	logic start_d;
@@ -211,13 +223,27 @@ module systolic_ctrl #(
 			counter <= next_counter;
 			start_d <= start;
                         ready_o <= (main_state == IDLE) || ((main_state == DRAIN) && shadow_feature_en);
-			output_valid <= (main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1)); 
+			output_valid <= (main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1));
 			if (shadow_consume)
 				start_pending <= 1'b0;
 			else if (start_rise && (main_state != IDLE))
 				start_pending <= 1'b1;
 		end
 	end
+
+	// WS-CTRL start: ping-pong flip register.
+	// Rule: flip prop_r on the cycle when we transition INTO COMPUTE state.
+	// This covers all 3 entry paths: LOAD_WTS->COMPUTE (initial), DRAIN->COMPUTE
+	// (shadow ready, skip LOAD_WTS), WAIT_SHADOW->COMPUTE. After the flip the
+	// freshly-loaded inactive buffer is the new active.
+	always_ff @(posedge clk_i or posedge rst_i) begin
+		if (rst_i)
+			prop_r <= 1'b0;
+		else if ((main_state != COMPUTE) && (main_state_next == COMPUTE))
+			prop_r <= ~prop_r;
+	end
+	assign prop_o = prop_r;
+	// WS-CTRL end
 
 	always_ff @(posedge clk_i or posedge rst_i) begin
 		if (rst_i) begin

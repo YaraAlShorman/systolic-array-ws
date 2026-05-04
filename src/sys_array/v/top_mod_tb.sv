@@ -15,6 +15,19 @@ module top_mod_tb;
     logic ready_o, shadow_weights_active_o, output_valid;
     logic signed [N-1:0][N-1:0][DATA_WIDTH-1:0] weight_debug_o;
 
+    // WS-TB start: derive top_weight_i from the existing top_data_i drive.
+    // Tasks like drive_load_wts/drive_shadow_weights stuff sext8(W[r][c]) into
+    // top_data_i during weight-load phases; the lower 8 bits of those slots
+    // are the actual weight values. Aliasing top_weight_i to those low 8 bits
+    // means every existing task drives the new wire correctly with zero edits.
+    logic signed [N-1:0][DATA_WIDTH-1:0] top_weight_i;
+    generate
+      for (genvar wc = 0; wc < N; wc++) begin : GEN_TOP_WEIGHT_ALIAS
+        assign top_weight_i[wc] = top_data_i[wc][DATA_WIDTH-1:0];
+      end
+    endgenerate
+    // WS-TB end
+
     logic signed [DATA_WIDTH-1:0] A1 [0:N-1][0:N-1], B1 [0:N-1][0:N-1], A2 [0:N-1][0:N-1], B2 [0:N-1][0:N-1];
     logic signed [PSUM_WIDTH-1:0] IP1 [0:N-1][0:N-1], IP2 [0:N-1][0:N-1];
     logic signed [PSUM_WIDTH-1:0] C1_exp [0:N-1][0:N-1], C2_exp [0:N-1][0:N-1];
@@ -44,7 +57,8 @@ module top_mod_tb;
         .ARRAY_SIZE(N), .DATA_WIDTH(DATA_WIDTH), .PSUM_WIDTH(PSUM_WIDTH), .ENABLE_MAC_BYPASS(0)
     ) dut (
         .clk_i(clk), .rst_i(reset), .start(start), .activations_valid_i(activations_valid_i),
-        .activations_i(activations_i), .top_data_i(top_data_i), .mac_bypass_i(mac_bypass_i),
+        .activations_i(activations_i), .top_data_i(top_data_i), .top_weight_i(top_weight_i),  // WS-TB: alias from top_data_i low 8b
+        .mac_bypass_i(mac_bypass_i),
         .final_psums_o(final_psums_o), .ready_o(ready_o), .shadow_weights_active_o(shadow_weights_active_o),
         .output_valid(output_valid), .weight_debug_o(weight_debug_o)
     );
