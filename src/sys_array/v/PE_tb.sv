@@ -55,7 +55,12 @@ module PE_tb;
   logic pe_b_is_weight_d;
   logic signed [7:0] pe_d_i;
   logic signed [7:0] pe_d_o;
+  logic pe_weight_latch_i;                         // WS-TB V2: pulse-driven load gate
   assign pe_d_i = pe_b_i[7:0];
+  // V2 PE expects a 1-cycle latch pulse, no longer derives load from v_i&&b_is_weight.
+  // For the legacy trace pattern (load is a single cycle of v_i=1, b_is_weight=1),
+  // the AND is exactly the right pulse — reproduces V1 behavior with no trace edits.
+  assign pe_weight_latch_i = pe_v_i && pe_b_is_weight_i;
   always_ff @(posedge clk or posedge reset) begin
     if (reset) begin
       pe_prop_i        <= 1'b0;
@@ -128,6 +133,7 @@ module PE_tb;
     ,.d_i          ( pe_d_i )                            // WS-TB: weight stream (low 8b of legacy b_i)
     ,.d_o          ( pe_d_o )                            // WS-TB: dangling, not checked
     ,.prop_i       ( pe_prop_i )                         // WS-TB: ping-pong selector
+    ,.weight_latch_i ( pe_weight_latch_i )               // WS-TB V2: pulse-driven load gate
 
     ,.v_o	   ( pe_v_o )
     ,.a_o	   ( pe_a_o )

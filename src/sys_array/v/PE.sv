@@ -33,6 +33,7 @@ module PE #(
   input  logic signed [DATA_WIDTH-1:0]  d_i,          // WS-PE: weight stream input (was sharing b_i)
   output logic signed [DATA_WIDTH-1:0]  d_o,          // WS-PE: weight stream output (registered, like b_o)
   input  logic                          prop_i,       // WS-PE: 0=c1_r active, 1=c2_r active
+  input  logic                          weight_latch_i, // WS-PE V2: 1-cycle pulse, latch d_i into inactive buffer (replaces v_i&&b_is_weight gate)
   // WS-PE end
 
   output logic               v_o,
@@ -56,11 +57,20 @@ module PE #(
   // ----------------------------
 
   // WS-PE start: ping-pong load. Active buffer is held; inactive buffer is the load target.
-  //   prop_i = 0 -> c1_r is active for MAC, c2_r receives d_i (when v_i & b_is_weight_i)
+  //   prop_i = 0 -> c1_r is active for MAC, c2_r receives d_i (when weight_latch_i)
   //   prop_i = 1 -> c2_r is active for MAC, c1_r receives d_i
-  // Reference: Gemmini PE.scala WS path (lines 118-131). The load gate b_is_weight_i
-  // is retained as-is; the change is (a) source of weight is d_i (dedicated wire),
-  // (b) target is INACTIVE buffer instead of overwriting the in-use weight.
+  //
+  // V2 change vs V1: load gate is now `weight_latch_i` (a dedicated 1-cycle pulse
+  // from systolic_ctrl), DECOUPLED from `v_i` and `b_is_weight_i`. This is what
+  // makes parallel LOAD+COMPUTE possible: during compute the active buffer drives
+  // MAC under v_i=1, while a shadow load can simultaneously fire weight_latch_i=1
+  // to capture into the inactive buffer without disturbing the compute datapath.
+  //
+  // Reference: Gemmini PE.scala WS path (lines 118-131). The original Gemmini
+  // PE has continuous-load semantics (`c2 := d` when valid), which works because
+  // their `d` wire is fully dedicated. We use a single-pulse latch instead since
+  // our top-level still streams data continuously — the pulse is the cleanest way
+  // to broadcast "latch now" to all PEs at the same cycle.
   //
   // Original single-buffer load (commented out, see modification_log.md):
   // always_ff @(posedge clk_i or posedge rst_i) begin
@@ -69,11 +79,14 @@ module PE #(
   //   else if (v_i && b_is_weight_i)
   //     weight_active <= b_i[DATA_WIDTH-1:0];
   // end
+  //
+  // V1 load gate (commented out, V2 supersedes):
+  // end else if (v_i && b_is_weight_i) begin
   always_ff @(posedge clk_i or posedge rst_i) begin
     if (rst_i) begin
       c1_r <= '0;
       c2_r <= '0;
-    end else if (v_i && b_is_weight_i) begin
+    end else if (weight_latch_i) begin                                   // WS-PE V2: pulse-driven latch (decoupled from v_i, b_is_weight_i)
       if (prop_i)
         c1_r <= d_i;                                  // prop=1 -> c2 active, load c1 from d_i
       else
@@ -112,11 +125,24 @@ module PE #(
       d_o <= '0;                                                 // WS-PE: register d_o (relay weight stream down)
     end else begin
       a_o <= a_i;
-      v_o <= !b_is_weight_i ? v_i : 1'b0;
-      if (mac_bypass | b_is_weight_i)
+      // WS-PE V2 start: decouple v_o, b_o from b_is_weight_i.
+      // V1 used `!b_is_weight_i ? v_i : 1'b0` for v_o and `mac_bypass | b_is_weight_i ? b_i : acc` for b_o.
+      // Those gates were correct only when LOAD and COMPUTE were mutually exclusive (single shared wire).
+      // With shadow concurrent with compute, b_is_weight_i may be 1 during a compute cycle, but we MUST
+      // still propagate v_o=v_i and b_o=acc so the psum chain is unaffected. Removing the gate:
+      //   - When v_i=0 (any non-compute cycle): mult=0, acc=b_i, b_o=b_i naturally. Same effect as V1.
+      //   - When v_i=1 (compute cycle): b_o=acc. Correct, regardless of shadow status.
+      // v_o <= !b_is_weight_i ? v_i : 1'b0;       // V1 (commented)
+      // if (mac_bypass | b_is_weight_i)            // V1 (commented)
+      //   b_o <= b_i;                              // V1 (commented)
+      // else                                       // V1 (commented)
+      //   b_o <= acc;                              // V1 (commented)
+      v_o <= v_i;
+      if (mac_bypass)
               b_o <= b_i;
       else
               b_o <= acc;
+      // WS-PE V2 end
       d_o <= d_i;                                                // WS-PE: 1-cycle relay to next PE down (matches b_o timing)
     end
   end

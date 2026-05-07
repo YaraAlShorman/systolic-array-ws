@@ -64,6 +64,7 @@ module top_mod #(
     logic signed [PSUM_WIDTH-1:0] b_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic signed [DATA_WIDTH-1:0] d_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];   // WS-TOP: vertical weight-stream link between PEs
     logic                         prop;                                      // WS-TOP: ping-pong selector from systolic_ctrl
+    logic                         weight_latch;                              // WS-TOP V2: broadcast latch pulse to all PE weight_latch_i
 
     always_ff @(posedge clk_i or posedge rst_i) begin
         if (rst_i) begin
@@ -144,7 +145,8 @@ module top_mod #(
         .shadow_weights_active_o (shadow_weights_active_o),
         .output_valid         (output_valid),
         .load_pulse_o         (load_pulse),
-        .prop_o               (prop)                                          // WS-TOP: ping-pong selector
+        .prop_o               (prop),                                         // WS-TOP: ping-pong selector
+        .weight_latch_o       (weight_latch)                                  // WS-TOP V2: broadcast weight-buffer latch pulse
     );
 
     // Skew valid into first PE column so row-r asserts r cycles after row-0.
@@ -180,10 +182,14 @@ module top_mod #(
 
                 if (c == 0) begin : LEFT_EDGE
                     assign a_in_local = activations_skewed[r];
-                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];
+                    // WS-TOP V2: drop the load_pulse mux. v_in_local is purely the compute valid path.
+                    // PE weight latch is now driven by the dedicated weight_latch wire (broadcast).
+                    // assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];   // V1
+                    assign v_in_local = v_first_col_skewed[r];
                 end else begin : INTERNAL_LEFT
                     assign a_in_local = a_link[r][c-1];
-                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];
+                    // assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];          // V1
+                    assign v_in_local = v_link[r][c-1];
                 end
 
                 if (r == 0) begin : TOP_EDGE
@@ -211,6 +217,7 @@ module top_mod #(
                     .d_i                (d_in_local),                                    // WS-TOP: weight stream in
                     .d_o                (d_link[r][c]),                                  // WS-TOP: weight stream out
                     .prop_i              (prop),                                         // WS-TOP: shared ping-pong selector
+                    .weight_latch_i     (weight_latch),                                  // WS-TOP V2: broadcast latch pulse
                     .v_o                (v_link[r][c]),
                     .a_o                (a_link[r][c]),
                     .b_o                (b_link[r][c]),

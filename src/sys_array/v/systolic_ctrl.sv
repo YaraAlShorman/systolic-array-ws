@@ -46,7 +46,12 @@ module systolic_ctrl #(
 	// WS-CTRL: ping-pong selector (Gemmini double-buffer).
 	// Flips on every transition into COMPUTE so the just-loaded inactive
 	// buffer becomes the active weight for the new matmul.
-	output logic prop_o
+	output logic prop_o,
+	// WS-CTRL V2: dedicated latch pulse for PE weight buffers (decoupled from
+	// load_pulse_o / b_is_weight). Goes high for one cycle when either the
+	// initial LOAD_WTS or a SHADOW_RUN finishes streaming. PE.weight_latch_i
+	// is broadcast across all PEs at this cycle.
+	output logic weight_latch_o
 );
 
 	// 1 disables parallel shadow weight load; drive from CSR / tie here (not a top_mod port).
@@ -95,7 +100,18 @@ module systolic_ctrl #(
 	assign start_rise = start & ~start_d;
 
 	logic shadow_load_window_open;
-	assign shadow_load_window_open = (main_state == WAIT_SHADOW) || ((main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1)));
+	// WS-CTRL V2 start: widen shadow window to include COMPUTE.
+	// V1 only allowed shadow during late DRAIN because top_data_i was shared
+	// with psum bias. V2 has a dedicated top_weight_i wire, so the weight
+	// stream is free during compute and shadow can fire as soon as a start is
+	// pending. SHADOW_RUN takes ARRAY_SIZE cycles; one COMPUTE+DRAIN cycle is
+	// 3*ARRAY_SIZE-1 cycles, so plenty of slack.
+	// V1 expression (commented, V2 supersedes):
+	// assign shadow_load_window_open = (main_state == WAIT_SHADOW) || ((main_state == DRAIN) && (counter >= 16'(ARRAY_SIZE-1)) && (counter <= 16'(LATENCY - 1)));
+	assign shadow_load_window_open = (main_state == COMPUTE)
+	                              || (main_state == DRAIN)
+	                              || (main_state == WAIT_SHADOW);
+	// WS-CTRL V2 end
 
 	assign shadow_weights_active_o = (shadow_state == SHADOW_RUN);
 
@@ -103,6 +119,11 @@ module systolic_ctrl #(
 
 	assign load_pulse_o = (main_state == LOAD_WTS && counter == 16'(ARRAY_SIZE - 1))
 	                   || (shadow_state == SHADOW_RUN && sh_counter == 16'(ARRAY_SIZE - 1));
+	// WS-CTRL V2: weight_latch_o has the same firing condition as load_pulse_o
+	// (both fire 1 cycle when either initial-load or shadow-load finishes
+	// streaming). Kept as a separate output so PEs can take a clean dedicated
+	// pulse port instead of re-deriving it from b_is_weight + load_pulse.
+	assign weight_latch_o = load_pulse_o;
 
 	logic shadow_consume;
 	assign shadow_consume = shadow_feature_en && (main_state_next == COMPUTE)
