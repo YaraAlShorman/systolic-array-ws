@@ -1,6 +1,124 @@
-// ============================================================
-// Top-level 8x8 weight-stationary systolic array
-// ------------------------------------------------------------
+`ifndef SHADOW_LOADING_V1
+module top_mod #(
+    parameter int ARRAY_SIZE  = 8,
+    parameter int DATA_WIDTH  = 8,
+    parameter int PSUM_WIDTH  = 32
+)(
+    input  logic clk_i,
+    input  logic rst_i,
+    input  logic activations_valid_i,
+    input  logic activations_stopped,
+    input  logic weight_en_i,
+    input  logic cold_start_load_i,
+    input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
+    input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_in,
+    input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psum_in,
+    output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o,
+    output logic                                         output_valid_o
+);
+
+logic [ARRAY_SIZE-1:0] load_active_row;
+    logic [ARRAY_SIZE-1:0] v_skewed;
+    logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] act_skewed;
+    logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] p_staggered;
+    
+    logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] w_skewed;
+    logic                                         weight_swap_pulse;
+
+    logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] p_mesh_exit;
+
+    systolic_ctrl #(
+        .ARRAY_SIZE(ARRAY_SIZE),
+        .DATA_WIDTH(DATA_WIDTH),
+        .PSUM_WIDTH(PSUM_WIDTH)
+    ) u_ctrl (
+        .clk_i               (clk_i),
+        .rst_i               (rst_i),
+        .activations_valid_i (activations_valid_i),
+        .activations_stopped (activations_stopped),
+        .weight_en_i         (weight_en_i),
+	.cold_start          (cold_start_load_i),
+        .activations_i       (activations_i),
+        .psum_in             (psum_in),
+        .weight_in           (weight_in),
+        .activations_skewed_o   (act_skewed),
+        .v_skewed_o             (v_skewed),
+        .load_active_row_o      (load_active_row),
+        .psums_staggered_o      (p_staggered),
+	.weights_skewed_o       (w_skewed),          
+        .weight_swap_pulse_o    (weight_swap_pulse),
+        .psums_from_mesh_i      (p_mesh_exit),
+        .final_psums_o          (final_psums_o),
+        .output_valid_o         (output_valid_o)
+    );
+
+    logic signed [DATA_WIDTH-1:0] a_mesh [0:ARRAY_SIZE][0:ARRAY_SIZE];
+    logic                         v_mesh [0:ARRAY_SIZE][0:ARRAY_SIZE];
+    logic signed [PSUM_WIDTH-1:0] p_mesh [0:ARRAY_SIZE][0:ARRAY_SIZE];
+    logic signed [DATA_WIDTH-1:0] w_mesh [0:ARRAY_SIZE][0:ARRAY_SIZE];
+    logic                         l_mesh [0:ARRAY_SIZE][0:ARRAY_SIZE];
+    genvar r, c;
+    generate
+        for (r = 0; r < ARRAY_SIZE; r++) begin : ROW
+            for (c = 0; c < ARRAY_SIZE; c++) begin : COL
+
+                logic pe_v_o;
+                logic signed [DATA_WIDTH-1:0] pe_a_o, pe_w_o;
+                logic signed [PSUM_WIDTH-1:0] pe_p_o;
+
+                PE #(
+                    .DATA_WIDTH (DATA_WIDTH),
+                    .PSUM_WIDTH (PSUM_WIDTH)
+                ) u_pe (
+                    .clk_i       (clk_i),
+                    .rst_i       (rst_i),
+                    .v_i         (v_mesh[r][c]),
+                    .a_i         (a_mesh[r][c]),
+                    .weight_en   (load_active_row[c]),
+                    .load_active (l_mesh[r][c]),
+                    .weight_i (w_mesh[r][c]),
+                    .psum_i   (p_mesh[r][c]),
+                    .v_o      (pe_v_o),
+                    .a_o      (pe_a_o),
+                    .weight_o (pe_w_o),
+                    .psum_o   (pe_p_o)
+                );
+
+                // pipeline registers: propagate activation right,
+                // accumulate psum down, pass weight down.
+                always_ff @(posedge clk_i or posedge rst_i) begin
+                    if (rst_i) begin
+                        a_mesh[r][c+1] <= '0;
+                        v_mesh[r][c+1] <= 1'b0;
+                        p_mesh[r+1][c] <= '0;
+                        w_mesh[r+1][c] <= '0;
+			l_mesh[r][c+1] <= 1'b0;
+                    end else begin
+                        a_mesh[r][c+1] <= pe_a_o;
+                        v_mesh[r][c+1] <= pe_v_o;
+                        p_mesh[r+1][c] <= pe_p_o;
+                        w_mesh[r+1][c] <= pe_w_o;
+			l_mesh[r][c+1] <= l_mesh[r][c];
+                    end
+                end
+            end
+        end
+    endgenerate
+
+    generate
+        for (genvar ii = 0; ii < ARRAY_SIZE; ii++) begin : gen_mesh_inputs
+            assign a_mesh[ii][0]   = act_skewed[ii];
+            assign v_mesh[ii][0]   = v_skewed[ii];
+            assign w_mesh[0][ii]   = w_skewed[ii];
+	    assign l_mesh[ii][0]   = load_active_row[ii]; // || cold_start_load_i;
+            assign p_mesh[0][ii]   = p_staggered[ii];
+            assign p_mesh_exit[ii] = p_mesh[ARRAY_SIZE][ii];
+        end
+    endgenerate
+
+endmodule
+
+`else
 
 module top_mod #(
     parameter ARRAY_SIZE  = 8,
@@ -16,9 +134,6 @@ module top_mod #(
     input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
 
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] top_data_i,
-
-    // WS-TOP: dedicated weight-stream input (was: sharing top_data_i with psum bias)
-    input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] top_weight_i,
 
     input  logic mac_bypass_i,
 
@@ -53,7 +168,7 @@ module top_mod #(
     logic [79:0] area_ififo_rdata;
     logic [79:0] area_sink_ff;
     logic signed [ARRAY_SIZE-1:0][ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_debug_raw;
-    logic [63:0] area_storage_digest;
+        logic [63:0] area_storage_digest;
     //***AREA EXP END***
 */
     logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_skewed;
@@ -62,9 +177,6 @@ module top_mod #(
     logic signed [DATA_WIDTH-1:0] a_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic                         v_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
     logic signed [PSUM_WIDTH-1:0] b_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];
-    logic signed [DATA_WIDTH-1:0] d_link [0:ARRAY_SIZE-1][0:ARRAY_SIZE-1];   // WS-TOP: vertical weight-stream link between PEs
-    logic                         prop;                                      // WS-TOP: ping-pong selector from systolic_ctrl
-    logic                         weight_latch;                              // WS-TOP V2: broadcast latch pulse to all PE weight_latch_i
 
     always_ff @(posedge clk_i or posedge rst_i) begin
         if (rst_i) begin
@@ -101,13 +213,13 @@ module top_mod #(
                                 ^ top_data_i[0][0]
                                 ^ top_data_i[1][0]
                                 ^ area_ififo_rdata[0]
-                                ^ area_dmem_rdata[0]};  
+                                ^ area_dmem_rdata[0]};
             area_push         <= area_scratch_addr[0];
             area_pop          <= area_scratch_addr[1];
             area_dmem_we      <= ~area_dmem_we;
             area_sink_ff      <= area_ififo_rdata
                                ^ {16'd0, area_dmem_rdata}
-                               ^ {79'd0, area_scratch_addr[0]};
+                              ^ {79'd0, area_scratch_addr[0]};
         end
     end
 
@@ -144,9 +256,7 @@ module top_mod #(
         .ready_o              (ready_o),
         .shadow_weights_active_o (shadow_weights_active_o),
         .output_valid         (output_valid),
-        .load_pulse_o         (load_pulse),
-        .prop_o               (prop),                                         // WS-TOP: ping-pong selector
-        .weight_latch_o       (weight_latch)                                  // WS-TOP V2: broadcast weight-buffer latch pulse
+        .load_pulse_o         (load_pulse)
     );
 
     // Skew valid into first PE column so row-r asserts r cycles after row-0.
@@ -160,7 +270,7 @@ module top_mod #(
                 always_ff @(posedge clk_i or posedge rst_i) begin
                     if (rst_i) begin
                         for (int j = 0; j < vr; j++) v_shift[j] <= 1'b0;
-                    end else if (input_valid_to_pe) begin
+		end else if (input_valid_to_pe) begin
                         v_shift[0] <= input_valid_to_pe;
                         for (int j = 1; j < vr; j++) v_shift[j] <= v_shift[j-1];
                     end
@@ -178,33 +288,26 @@ module top_mod #(
                 logic signed [DATA_WIDTH-1:0] a_in_local;
                 logic                         v_in_local;
                 logic signed [PSUM_WIDTH-1:0] b_in_local;
-                logic signed [DATA_WIDTH-1:0] d_in_local;                                // WS-TOP: weight-stream input per PE
 
                 if (c == 0) begin : LEFT_EDGE
                     assign a_in_local = activations_skewed[r];
-                    // WS-TOP V2: drop the load_pulse mux. v_in_local is purely the compute valid path.
-                    // PE weight latch is now driven by the dedicated weight_latch wire (broadcast).
-                    // assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];   // V1
-                    assign v_in_local = v_first_col_skewed[r];
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_first_col_skewed[r];
                 end else begin : INTERNAL_LEFT
                     assign a_in_local = a_link[r][c-1];
-                    // assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];          // V1
-                    assign v_in_local = v_link[r][c-1];
+                    assign v_in_local = (b_is_weight_row[r]) ? load_pulse : v_link[r][c-1];
                 end
 
                 if (r == 0) begin : TOP_EDGE
                     assign b_in_local = top_data_i[c];
-                    assign d_in_local = top_weight_i[c];                                 // WS-TOP: top row pulls weights from external
                 end else begin : INTERNAL_TOP
                     assign b_in_local = b_link[r-1][c];
-                    assign d_in_local = d_link[r-1][c];                                  // WS-TOP: vertical weight chain
                 end
 
                 PE #(
                     .ENABLE_MAC_BYPASS (ENABLE_MAC_BYPASS),
                     .DATA_WIDTH        (DATA_WIDTH),
                     .PSUM_WIDTH        (PSUM_WIDTH),
-		    .ROW_ID            (r),
+                    .ROW_ID            (r),
                     .COL_ID            (c)
                 ) u_pe (
                     .clk_i              (clk_i),
@@ -214,16 +317,12 @@ module top_mod #(
                     .a_i                (a_in_local),
                     .b_i                (b_in_local),
                     .b_is_weight_i      (b_is_weight_row[r]),
-                    .d_i                (d_in_local),                                    // WS-TOP: weight stream in
-                    .d_o                (d_link[r][c]),                                  // WS-TOP: weight stream out
-                    .prop_i              (prop),                                         // WS-TOP: shared ping-pong selector
-                    .weight_latch_i     (weight_latch),                                  // WS-TOP V2: broadcast latch pulse
                     .v_o                (v_link[r][c]),
                     .a_o                (a_link[r][c]),
                     .b_o                (b_link[r][c]),
      //               .weight_o           (weight_debug_raw[r][c]) //AREA EXP
                     .weight_o           (weight_debug_o[r][c])
-        	 );
+                 );
 
             end
         end
@@ -257,3 +356,6 @@ module top_mod #(
 */
 //***AREA EXP END***
 endmodule
+
+
+`endif

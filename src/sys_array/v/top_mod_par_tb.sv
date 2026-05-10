@@ -1,11 +1,377 @@
 `timescale 1ns/1ps
 
+`ifndef SHADOW_LOADING_V1
+
+module top_mod_par_tb;
+
+    localparam bit TB_PING_PONG_ENABLED = 1'b1;
+    localparam int    N                    = 8;
+    localparam int    NUM_MAT              = 10;
+    localparam int    DATA_WIDTH           = 8;
+    localparam int    PSUM_WIDTH           = 32;
+    localparam int    RESET_HOLD_CYCLES    = 10;
+    localparam int    POST_RST_SETTLE      = 3;
+    localparam int    TOTAL_OUTPUT_ROWS    = NUM_MAT * N;
+    localparam int    OUTPUT_TAIL_CYCLES   = 64;
+    localparam bit    VERIFY_RESULTS       = 1'b1;
+    localparam int    MAX_MISMATCH_REPORT  = 32;
+
+    logic activations_valid_i;
+    logic activations_stopped;
+    logic weight_en_i;
+    logic cold_start_load_i;
+    logic signed [N-1:0][DATA_WIDTH-1:0] activations_i;
+    logic signed [N-1:0][DATA_WIDTH-1:0] weight_in;
+    logic signed [N-1:0][PSUM_WIDTH-1:0] psum_in;
+    logic signed [N-1:0][PSUM_WIDTH-1:0] final_psums_o;
+    logic                                output_valid_o;
+
+    logic signed [DATA_WIDTH-1:0] A   [0:NUM_MAT-1][0:N-1][0:N-1];
+    logic signed [DATA_WIDTH-1:0] B   [0:NUM_MAT-1][0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] IP  [0:NUM_MAT-1][0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C_exp    [0:NUM_MAT-1][0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] C_actual [0:NUM_MAT-1][0:N-1][0:N-1];
+    logic signed [PSUM_WIDTH-1:0] D        [0:NUM_MAT-1][0:N-1][0:N-1];
+
+    int total_errors = 0;
+
+    initial begin
+`ifndef VERILATOR
+        $fsdbDumpfile("waveform.fsdb");
+        $fsdbDumpvars(0, top_mod_par_tb, "+mda");
+`endif
+        $dumpfile("top_mod_par_tb.vcd");
+        $dumpvars(0, top_mod_par_tb);
+    end
+
+/*    top_mod #(.ARRAY_SIZE(N)) dut (.*);
+
+    initial clk = 1'b0;
+    always #5 clk = ~clk;
+*/
+
+    logic clk;
+    bsg_nonsynth_clock_gen #(20000) clk_gen_1 (clk);
+
+    /* Non-synth reset generator */
+    logic reset;
+    bsg_nonsynth_reset_gen #(.num_clocks_p(1),.reset_cycles_lo_p(10),. reset_cycles_hi_p(10))
+      reset_gen
+        (.clk_i        ( clk )
+        ,.async_reset_o( reset )
+        );
+
+    // Flattened bridge signals
+    logic signed [N-1:0][DATA_WIDTH-1:0] tb_activations_i;
+    logic signed [N-1:0][DATA_WIDTH-1:0] tb_weights_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0] tb_psums_i;
+    logic signed [N-1:0][PSUM_WIDTH-1:0] tb_final_psums_o;
+    assign tb_activations_i = activations_i;
+    assign tb_psums_i       = psum_in;
+    assign tb_weights_i     = weight_in;
+    assign final_psums_o    = tb_final_psums_o;
+
+    top_mod #(
+        .ARRAY_SIZE       (N),
+        .DATA_WIDTH       (DATA_WIDTH),
+        .PSUM_WIDTH       (PSUM_WIDTH)
+    ) dut (
+        .clk_i              (clk),
+        .rst_i              (reset),
+        .activations_valid_i(activations_valid_i),
+        .activations_stopped (activations_stopped),
+        .weight_en_i      (weight_en_i),
+        .cold_start_load_i  (cold_start_load_i),
+        .output_valid_o       (output_valid_o),
+
+        .\activations_i[0] (tb_activations_i[0]),
+        .\activations_i[1] (tb_activations_i[1]),
+        .\activations_i[2] (tb_activations_i[2]),
+        .\activations_i[3] (tb_activations_i[3]),
+        .\activations_i[4] (tb_activations_i[4]),
+        .\activations_i[5] (tb_activations_i[5]),
+        .\activations_i[6] (tb_activations_i[6]),
+        .\activations_i[7] (tb_activations_i[7]),
+
+        .\weight_in[0] (tb_weights_i[0]),
+        .\weight_in[1] (tb_weights_i[1]),
+        .\weight_in[2] (tb_weights_i[2]),
+        .\weight_in[3] (tb_weights_i[3]),
+        .\weight_in[4] (tb_weights_i[4]),
+        .\weight_in[5] (tb_weights_i[5]),
+        .\weight_in[6] (tb_weights_i[6]),
+        .\weight_in[7] (tb_weights_i[7]),
+
+        .\psum_in[0] (tb_psums_i[0]),
+        .\psum_in[1] (tb_psums_i[1]),
+        .\psum_in[2] (tb_psums_i[2]),
+        .\psum_in[3] (tb_psums_i[3]),
+        .\psum_in[4] (tb_psums_i[4]),
+        .\psum_in[5] (tb_psums_i[5]),
+        .\psum_in[6] (tb_psums_i[6]),
+        .\psum_in[7] (tb_psums_i[7]),
+
+        .\final_psums_o[0] (tb_final_psums_o[0]),
+        .\final_psums_o[1] (tb_final_psums_o[1]),
+        .\final_psums_o[2] (tb_final_psums_o[2]),
+        .\final_psums_o[3] (tb_final_psums_o[3]),
+        .\final_psums_o[4] (tb_final_psums_o[4]),
+        .\final_psums_o[5] (tb_final_psums_o[5]),
+        .\final_psums_o[6] (tb_final_psums_o[6]),
+        .\final_psums_o[7] (tb_final_psums_o[7])
+    );
+
+    int cycle_cnt = 0;
+    always @(posedge clk) cycle_cnt <= reset ? 0 : cycle_cnt + 1;
+
+    task automatic print_matrix(input string lbl, input int m, input logic signed [31:0] mat [0:N-1][0:N-1]);
+        $display("\n--- %s (Matrix %0d) ---", lbl, m);
+        for (int r = 0; r < N; r++) begin
+            $write("[%0d] ", r);
+            for (int c = 0; c < N; c++) $write("%10d ", mat[r][c]);
+            $display("");
+        end
+    endtask
+
+    task automatic display_results(int m);
+        logic signed [31:0] tA [N][N], tB [N][N];
+        for(int r=0; r<N; r++) for(int c=0; c<N; c++) begin
+            tA[r][c] = 32'(A[m][r][c]); tB[r][c] = 32'(B[m][r][c]);
+        end
+        $display("\n===================== MATRIX %0d RESULTS =====================", m);
+        print_matrix("ACTIVATIONS (A)", m, tA);
+        print_matrix("WEIGHTS (B)", m, tB);
+        print_matrix("INITIAL PSUMS (D)", m, D[m]);
+        print_matrix("EXPECTED (C)", m, C_exp[m]);
+        print_matrix("HARDWARE ACTUAL (C)", m, C_actual[m]);
+    endtask
+
+    function automatic logic signed [DATA_WIDTH-1:0] nz8(int m, r, c);
+        logic signed [DATA_WIDTH-1:0] x = DATA_WIDTH'((m * 17 + r * 3 + c * 5) % 31 - 15);
+        return (x == 0) ? 8'sd1 : x;
+    endfunction
+
+    task automatic compute_expected(int m);
+        for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) begin
+            logic signed [63:0] acc = D[m][i][j];
+            for (int k = 0; k < N; k++) acc += $signed(A[m][i][k]) * $signed(B[m][k][j]);
+            C_exp[m][i][j] = acc[31:0];
+        end
+    endtask
+
+    task automatic stream_weights(input int mat);
+        weight_en_i <= 1'b1;
+        for (int r = N-1; r >= 0; r--) begin
+            for (int c = 0; c < N; c++) weight_in[c] <= B[mat][r][c];
+            @(posedge clk);
+        end
+    endtask
+    
+    task automatic stream_cold_start_weights();
+        weight_en_i <= 1'b1;
+        for (int r = N-1; r >= 0; r--) begin
+            for (int c = 0; c < N; c++) weight_in[c] <= B[0][r][c];
+
+            // Assert cold_start on the exact cycle we drive the last row
+            if (r == 0) cold_start_load_i <= 1'b1;
+
+            @(posedge clk);
+        end
+        weight_en_i       <= 1'b0;
+        weight_in         <= '0;
+        cold_start_load_i <= 1'b0; // Deassert after the 8th cycle
+    endtask
+
+    task automatic stream_all_activations();
+        activations_valid_i <= 1'b1;
+        for (int m = 0; m < NUM_MAT; m++) begin
+            for (int r = 0; r < N; r++) begin
+                for (int c = 0; c < N; c++) begin
+                    activations_i[c] <= A[m][r][c];
+                    psum_in[c]       <= D[m][r][c];
+                end
+                @(posedge clk);
+            end
+        end
+        activations_i       <= '0; 
+        activations_valid_i <= 1'b0; 
+        psum_in             <= '0;
+    endtask
+
+    task automatic prefetch_weights_loop();
+        // B[0] is loaded in cold-start. Load B[1..9] continuously while 
+        // Matrix 0..8 are computing to hit the zero-bubble requirement.
+        for (int m = 1; m < NUM_MAT; m++) begin
+            stream_weights(m); 
+        end
+        weight_en_i <= 1'b0; 
+        weight_in   <= '0;
+    endtask
+
+    task automatic sample_outputs();
+        while (1) begin
+            @(negedge clk);
+            if (output_valid_o === 1'b1) break;
+        end
+
+        for (int m = 0; m < NUM_MAT; m++) begin
+            for (int r = 0; r < N; r++) begin
+	        for (int c = 0; c < N; c++) C_actual[m][r][c] = final_psums_o[c];
+                if (!(m == NUM_MAT-1 && r == N-1)) @(negedge clk);
+            end
+            display_results(m);
+        end
+    endtask
+
+    task automatic stream_matrix_sequential(int m);
+        weight_en_i = 1'b1;
+        for (int r = N-1; r >= 0; r--) begin
+            for (int c = 0; c < N; c++) weight_in[c] = B[m][r][c];
+            
+            if (r == 0) cold_start_load_i = 1'b1; 
+            
+            @(posedge clk);
+        end
+        weight_en_i       = 1'b0;
+        weight_in         = '0;
+        cold_start_load_i = 1'b0;
+
+        activations_valid_i = 1'b1;
+        for (int r = 0; r < N; r++) begin
+            for (int c = 0; c < N; c++) begin
+                activations_i[c] = A[m][r][c];
+                psum_in[c]       = D[m][r][c];
+            end
+            @(posedge clk);
+        end
+        activations_valid_i = 1'b0;
+        activations_i       = '0;
+        psum_in             = '0;
+    endtask
+
+    task automatic sample_outputs_sequential();
+        for (int m = 0; m < NUM_MAT; m++) begin
+            wait (output_valid_o === 1'b1);
+            @(negedge clk);
+            
+            for (int r = 0; r < N; r++) begin
+                for (int c = 0; c < N; c++) C_actual[m][r][c] = final_psums_o[c];
+                if (r < N - 1) @(negedge clk);
+            end
+            display_results(m);
+        end
+    endtask
+
+    initial begin
+        activations_valid_i = 0; 
+        weight_en_i = 0; 
+        cold_start_load_i = 0;
+        activations_stopped = 0; 
+        activations_i = '0; 
+        weight_in = '0; 
+        psum_in = '0;
+
+        for (int m = 0; m < NUM_MAT; m++) begin
+            for (int r = 0; r < N; r++) for (int c = 0; c < N; c++) begin
+                A[m][r][c] = nz8(m, r, c); 
+                B[m][r][c] = nz8(m+3, r, c);
+                D[m][r][c] = (m + 1) * 1000 + r * 10 + c;
+            end
+            compute_expected(m);
+        end
+
+        repeat (20) @(posedge clk); 
+        //rst_i <= 1'b0; 
+        repeat (3) @(posedge clk);
+
+        // Phase 0: Cold Start
+        stream_cold_start_weights();
+	/*
+        cold_start_load_i <= 1'b1; 
+        @(posedge clk); 
+        cold_start_load_i <= 1'b0;
+        */
+        if (TB_PING_PONG_ENABLED) begin
+            $display("[%0t] Starting Simulation in High-Performance PING-PONG Mode", $time);
+            stream_cold_start_weights();
+            fork
+                stream_all_activations();
+                prefetch_weights_loop();
+                sample_outputs();
+            join
+        end else begin
+            $display("[%0t] Starting Simulation in Fallback SEQUENTIAL Mode", $time);
+            fork
+                begin
+                    for (int m = 0; m < NUM_MAT; m++) begin
+                        stream_matrix_sequential(m);
+                        
+                        if (m < NUM_MAT - 1) begin
+                            repeat (15) @(posedge clk);
+                        end
+                    end
+                end
+                sample_outputs_sequential();
+            join
+        end       
+
+
+        if (VERIFY_RESULTS) begin
+            $display("\n=========================================================");
+            $display("                   VERIFICATION SUMMARY                  ");
+            $display("=========================================================");
+
+            for (int m = 0; m < NUM_MAT; m++) begin
+                int mat_errors = 0;
+                for (int r = 0; r < N; r++) begin
+                    for (int c = 0; c < N; c++) begin
+                        if (C_actual[m][r][c] !== C_exp[m][r][c]) begin
+                            mat_errors++;
+                            total_errors++;
+                            if (total_errors <= MAX_MISMATCH_REPORT) begin
+                                $display("[ERROR] Mat %0d [%0d][%0d]: Expected %0d, Got %0d",
+                                         m, r, c, C_exp[m][r][c], C_actual[m][r][c]);
+                            end
+                        end
+                    end
+                end
+
+                // Matrix-level summary
+                if (mat_errors == 0) $display("Matrix %0d: PASS", m);
+                else                 $display("Matrix %0d: FAIL (%0d errors)", m, mat_errors);
+            end
+
+            $display("\n---------------------------------------------------------");
+            if (total_errors == 0) begin
+                $display("  STATUS: *** PASS *** (All %0d matrices matched!)", NUM_MAT);
+            end else begin
+                $display("  STATUS: *** FAIL *** (%0d total mismatches)", total_errors);
+                if (total_errors > MAX_MISMATCH_REPORT) begin
+                    $display("  (Only the first %0d errors were printed)", MAX_MISMATCH_REPORT);
+                end
+            end
+            $display("---------------------------------------------------------\n");
+        end
+
+        $display("[%0t] SIMULATION COMPLETE", $time);
+        $finish;
+    end
+
+    initial begin : watchdog
+        repeat (2000) @(posedge clk);
+        $display("[%0t] WATCHDOG TIMEOUT", $time);
+        $finish;
+    end
+endmodule
+
+`else
+
 module top_mod_par_tb;
     localparam bit TB_SHADOW_ENABLED = 1'b1;
     localparam int N = 8;
     localparam int DATA_WIDTH = 8;
     localparam int PSUM_WIDTH = 32;
-    localparam int RESET_HOLD_CYCLES = 50;
+    localparam int RESET_HOLD_CYCLES = 100;
     localparam int POST_RST_SETTLE_CYCLES = 8;
     localparam int READY_WAIT_LIMIT = 5000;
 
@@ -47,19 +413,10 @@ module top_mod_par_tb;
     assign tb_top_data_i    = top_data_i;
     assign final_psums_o    = tb_final_psums_o;
 
-    // WS-TB start: derive top_weight_i from top_data_i low 8 bits (see top_mod_tb.sv)
-    logic signed [N-1:0][DATA_WIDTH-1:0]  tb_top_weight_i;
-    generate
-      for (genvar wc2 = 0; wc2 < N; wc2++) begin : GEN_TOP_WEIGHT_PAR
-        assign tb_top_weight_i[wc2] = tb_top_data_i[wc2][DATA_WIDTH-1:0];
-      end
-    endgenerate
-    // WS-TB end
-
     top_mod #(
         .ARRAY_SIZE       (N),
         .DATA_WIDTH       (DATA_WIDTH),
-        .PSUM_WIDTH       (PSUM_WIDTH),
+	.PSUM_WIDTH       (PSUM_WIDTH),
         .ENABLE_MAC_BYPASS(0)
     ) dut (
         .clk_i                   (clk),
@@ -90,17 +447,6 @@ module top_mod_par_tb;
         .\top_data_i[6] (tb_top_data_i[6]),
         .\top_data_i[7] (tb_top_data_i[7]),
 
-        // WS-TB start: weight wire (alias from top_data_i low 8 bits)
-        .\top_weight_i[0] (tb_top_weight_i[0]),
-        .\top_weight_i[1] (tb_top_weight_i[1]),
-        .\top_weight_i[2] (tb_top_weight_i[2]),
-        .\top_weight_i[3] (tb_top_weight_i[3]),
-        .\top_weight_i[4] (tb_top_weight_i[4]),
-        .\top_weight_i[5] (tb_top_weight_i[5]),
-        .\top_weight_i[6] (tb_top_weight_i[6]),
-        .\top_weight_i[7] (tb_top_weight_i[7]),
-        // WS-TB end
-
         .\final_psums_o[0] (tb_final_psums_o[0]),
         .\final_psums_o[1] (tb_final_psums_o[1]),
         .\final_psums_o[2] (tb_final_psums_o[2]),
@@ -111,16 +457,6 @@ module top_mod_par_tb;
         .\final_psums_o[7] (tb_final_psums_o[7])
     );
 
-/*
-    top_mod #(
-        .ARRAY_SIZE(N), .DATA_WIDTH(DATA_WIDTH), .PSUM_WIDTH(PSUM_WIDTH), .ENABLE_MAC_BYPASS(0)
-    ) dut (
-        .clk_i(clk), .rst_i(reset), .start(start), .activations_valid_i(activations_valid_i),
-        .activations_i(activations_i), .top_data_i(top_data_i), .mac_bypass_i(mac_bypass_i),
-        .final_psums_o(final_psums_o), .ready_o(ready_o), .shadow_weights_active_o(shadow_weights_active_o),
-        .output_valid(output_valid), .weight_debug_o(weight_debug_o)
-    );
-*/
     function automatic logic signed [PSUM_WIDTH-1:0] sext8(input logic signed [DATA_WIDTH-1:0] x);
         return $signed({{(PSUM_WIDTH-DATA_WIDTH){x[DATA_WIDTH-1]}}, x});
     endfunction
@@ -214,10 +550,9 @@ module top_mod_par_tb;
         activations_i = '0;
         top_data_i = '0;
     endtask
-
     task automatic queue_start_and_drive_shadow_weights(input logic signed [DATA_WIDTH-1:0] W [0:N-1][0:N-1]);
         wait_ready_for_start("queue_shadow");
-        @(posedge clk); start = 1'b1; 
+        @(posedge clk); start = 1'b1;
         @(posedge clk); start = 1'b0; for (int c=0;c<N;c++) top_data_i[c]=sext8(W[N-1][c]);
         while (shadow_weights_active_o !== 1'b1) begin
             for (int c=0;c<N;c++) top_data_i[c]=sext8(W[N-1][c]);
@@ -242,11 +577,11 @@ module top_mod_par_tb;
         wait_ready_for_start("drive_second_load_wts_no_shadow");
         @(posedge clk);
         start = 1'b1;
-	@(posedge clk);
+        @(posedge clk);
         for (int c=0;c<N;c++) top_data_i[c] = sext8(W[N-1][c]);
         start = 1'b0;
         @(posedge clk);
-	for (int t=1;t<N;t++) begin
+        for (int t=1;t<N;t++) begin
             for (int c=0;c<N;c++) top_data_i[c] = sext8(W[N-1-t][c]);
             @(posedge clk);
         end
@@ -336,10 +671,12 @@ module top_mod_par_tb;
         errors += compare(C1_actual, C1_exp, "C1");
         $display("[%0t] ============== Matmul 2 results ==============", $time);
         disp_int32(C2_actual, "C2 (actual)");
-	errors += compare(C2_actual, C2_exp, "C2");
+        errors += compare(C2_actual, C2_exp, "C2");
         if (errors == 0) $display("[%0t] *** ALL PASS ***", $time);
         else $display("[%0t] *** %0d ERRORS ***", $time, errors);
         repeat (20) @(posedge clk);
         $finish;
     end
-endmodule
+    endmodule
+
+`endif
