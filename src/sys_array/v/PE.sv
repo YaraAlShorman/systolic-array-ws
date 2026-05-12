@@ -114,35 +114,39 @@ endmodule
 `else
 
 module PE #(
-  parameter int ENABLE_MAC_BYPASS = 0,  // 1 = use mac_bypass_i input
-                                // 0 = normal mac operation (mac_bypass_i ignored)
   parameter int DATA_WIDTH = 8,
   parameter int PSUM_WIDTH = 32,
-  parameter int ROW_ID = 0, // bchang01 - not needed for now
-  parameter int COL_ID = 0
 )(
-  input clk_i,
-  input rst_i,
-  input v_i,
-  input mac_bypass_i,           // 1 = forward psum unchanged
+  input  logic                         clk_i,
+  input  logic                         rst_i,
 
-  input  logic signed [DATA_WIDTH-1:0]  a_i,
+  // Weight/Psum path - registered inside PE
   input  logic signed [PSUM_WIDTH-1:0] b_i,
-  input  logic               b_is_weight_i,
-
-  output logic               v_o,
-  output logic signed [DATA_WIDTH-1:0]  a_o,
+  input  logic                         b_is_weight_i,
   output logic signed [PSUM_WIDTH-1:0] b_o,
-  output logic signed [DATA_WIDTH-1:0] weight_o         // debug stored weight
+  output logic signed [DATA_WIDTH-1:0] weight_o, // debug stored weight
+
+  // Activation path - registered inside PE
+  input  logic signed [DATA_WIDTH-1:0] a_i,
+  output logic signed [DATA_WIDTH-1:0] a_o,
+
+  // Valid
+  input  logic                         v_i,
+  output logic                         v_o
 );
 
-  logic               mac_bypass;
-  logic signed [DATA_WIDTH-1:0]  weight_active;
+  // ----------------------------
+  // Internal Signals/Registers
+  // ----------------------------
+  logic signed [DATA_WIDTH-1:0]   weight_active; // current weight
   logic signed [DATA_WIDTH*2-1:0] mult;     // 8b x 8b -> 16b product
   logic signed [PSUM_WIDTH:0]     mult_ext; // sign-extended product (33b)
   logic signed [PSUM_WIDTH:0]     acc_full; // guarded accumulator (33b)
-  logic signed [PSUM_WIDTH-1:0]   acc;
+  logic signed [PSUM_WIDTH-1:0]   acc;      // saturated result (32b)
 
+  // ----------------------------
+  // Weight Register
+  // ----------------------------
   always_ff @(posedge clk_i or posedge rst_i) begin
     if (rst_i)
       weight_active <= '0;
@@ -151,15 +155,18 @@ module PE #(
   end
 
   // ----------------------------
-  // MAC Bypass Control
+  // MAC Computation
   // ----------------------------
+  // Accumulator clamps values to min/max without being truly sticky. For
+  // example, a value clamped to max can still be subtracted from.
 
-  // mac_bypass_r = 0 forwards psum without mac
-  assign mac_bypass = (ENABLE_MAC_BYPASS != 0) & mac_bypass_i;
+  // step 1: multiply if valid - 8b signed x 8b signed => 16b signed
+  assign mult = v_i ? (weight_active * a_i) : 16'sd0;  
 
-  assign mult = v_i ? (weight_active * a_i) : 16'sd0;
+  // step 2: sign-extend mult to 33b
   assign mult_ext = {{(PSUM_WIDTH - DATA_WIDTH * 2 + 1){mult[DATA_WIDTH*2-1]}}, mult};
 
+  // step 3: sign-extend b_i to 33b, then acc
   assign acc_full = mult_ext + {{1{b_i[PSUM_WIDTH-1]}}, b_i};
 
   // step 4: saturate to INT32 using guard bit
@@ -178,8 +185,8 @@ module PE #(
   // ----------------------------
   // Output
   // ----------------------------
-  // Register the horizontal data/valid hop so each PE-to-PE transfer is
-  // one cycle, matching systolic timing and reducing long combinational paths.
+  // Register the horizontal data/valid hop inside each PE so each PE-to-PE
+  // transfer in the mesh is one cycle.
   always_ff @(posedge clk_i or posedge rst_i) begin
     if (rst_i) begin
       a_o <= '0;
@@ -188,7 +195,7 @@ module PE #(
     end else begin
       a_o <= a_i;
       v_o <= !b_is_weight_i ? v_i : 1'b0;
-      if (mac_bypass | b_is_weight_i)
+      if (b_is_weight_i)
               b_o <= b_i;
       else
               b_o <= acc;
