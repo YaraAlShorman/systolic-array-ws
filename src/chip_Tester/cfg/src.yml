@@ -1,0 +1,19 @@
+# src.yml - hammer source file config
+
+# List of all Verilog source files to include in this build.
+synthesis.inputs.input_files: [
+  # "v/systolic_ctrl.sv",
+  # "v/top_mod.sv",
+  # "v/PE.sv",
+  # "v/depacketizer.sv",
+  "chip_test/chip_tester.sv",
+  "chip_test/parity_generator.sv",
+  "chip_test/bsg_link_wrapper.sv",
+  # Add more source files here as needed
+]
+synthesis.inputs.input_files_meta: [append, subst]
+
+# Add synthesis input files to simulation inputs (Only for RTL sim)
+sim.inputs.input_files: synthesis.inputs.input_files
+sim.inputs.input_files_meta: [crossref, subst]
+

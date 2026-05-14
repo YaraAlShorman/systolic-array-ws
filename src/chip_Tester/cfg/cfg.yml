@@ -1,0 +1,31 @@
+# cfg.yml - Main hammer config file
+
+# Set top level for synthesis
+synthesis.inputs.top_module: "chip_tester" # TODO: update top module name
+sim.inputs.tb_name: "chip_tester"
+
+# Don't synthesize these gate-level netlist modules
+synthesis.inputs.preserve_modules: []
+
+# Custom SDC constraints
+vlsi.inputs:
+  # You can add SDC constraints directly here (list of strings)
+  custom_sdc_constraints: []
+  
+  # Additional SDC files to read
+  custom_sdc_files:
+  - "constraints.tcl"
+  custom_sdc_files_meta: prependlocal # Prepend path of this config file!
+
+
+# Placement Constraints
+vlsi.inputs.placement_constraints:
+  - path: "TOP" # (this name isn't actually checked...)
+    type: toplevel
+    # Define chip dimensions
+    width: 2000
+    height: 2000
+    x: 0
+    y: 0
+    margins: {left: 0, right: 0, top: 0, bottom: 0}
+

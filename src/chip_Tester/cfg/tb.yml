@@ -1,0 +1,49 @@
+# Search directories for `include directives in simulations
+sim.inputs.tb_incdir: [
+  "${bsg_root}/bsg_misc"
+  # TODO: list any additional directories
+]
+sim.inputs.tb_incdir_meta: [subst]
+
+# List of Verilog testbenches (or other sources) needed for simulation only.
+sim.inputs.tb_input_files: [
+  # TODO: list verilog files
+  "chip_test/chip_tester.sv",
+  "chip_test/rx_trace_rom.sv",
+  "chip_test/tx_trace_rom.sv",
+  # BSG utilities
+  "${bsg_root}/bsg_misc/bsg_defines.v",
+  "${bsg_root}/bsg_test/bsg_nonsynth_clock_gen.v",
+  "${bsg_root}/bsg_test/bsg_nonsynth_reset_gen.v",
+  "${bsg_root}/bsg_fsb/bsg_fsb_node_trace_replay.v",
+  "${bsg_root}/bsg_link/bsg_link_ddr_upstream.v",
+  "${bsg_root}/bsg_link/bsg_link_ddr_downstream.v",
+  "${bsg_root}/bsg_link/bsg_link_iddr_phy.v",
+  "${bsg_root}/bsg_link/bsg_link_source_sync_downstream.v",
+  "${bsg_root}/bsg_dataflow/bsg_serial_in_parallel_out_full.v",
+  "${bsg_root}/bsg_async/bsg_async_fifo.v",
+  "${bsg_root}/bsg_misc/bsg_counter_clear_up.v",
+  "${bsg_root}/bsg_dataflow/bsg_round_robin_1_to_n.v",
+  "${bsg_root}/bsg_mem/bsg_mem_1r1w.v",
+  "${bsg_root}/bsg_async/bsg_async_ptr_gray.v",
+  "${bsg_root}/bsg_mem/bsg_mem_1r1w_synth.v",
+  "${bsg_root}/bsg_async/bsg_launch_sync_sync.v",
+  "${bsg_root}/bsg_dataflow/bsg_parallel_in_serial_out.v",
+  "${bsg_root}/bsg_link/bsg_link_source_sync_upstream.v",
+  "${bsg_root}/bsg_link/bsg_link_oddr_phy.v",
+  "${bsg_root}/bsg_async/bsg_async_credit_counter.v",
+  "${bsg_root}/bsg_misc/bsg_gray_to_binary.v",
+  "${bsg_root}/bsg_misc/bsg_scan.v",
+  "${bsg_root}/bsg_dataflow/bsg_two_fifo.v",
+  
+]
+sim.inputs.tb_input_files_meta: [append, subst]
+
+# List of trace files for the simulation
+sim.inputs.trace_files: [
+  # TODO: list any trace files
+  # "v/trace.tr" // bchang01 - commented out in favor of own made ROM
+  # "v/trace_systolic_ctrl.tr",
+  # "v/trace_top_mod.tr"
+]
+
