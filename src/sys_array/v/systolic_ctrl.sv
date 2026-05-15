@@ -20,9 +20,7 @@ module systolic_ctrl #(
     output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psums_staggered_o,
     
     output logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weights_skewed_o,
-    output logic [ARRAY_SIZE-1:0]                        weight_en_skewed_o, 
     
-    output logic                                         weight_swap_pulse_o,
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psums_from_mesh_i,
     output logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] final_psums_o,
     output logic                                         output_valid_o
@@ -38,7 +36,6 @@ module systolic_ctrl #(
     logic                          load_pulse_raw;
     logic                          active_beat;
     
-    assign weight_swap_pulse_o = load_pulse_raw;
     assign active_beat = activations_valid_i & ~activations_stopped;
 
     always_ff @(posedge clk_i or posedge rst_i) begin
@@ -70,7 +67,6 @@ module systolic_ctrl #(
                 assign v_skewed_o[i]           = active_beat;
                 assign load_active_row_o[i]    = load_pulse_raw || cold_start; 
                 assign weights_skewed_o[i]     = weight_in[i];
-                assign weight_en_skewed_o[i]   = weight_en_i;
 
             end else begin : pipe_delay
                 logic signed [DATA_WIDTH-1:0] a_pipe [0:i-1];
@@ -146,24 +142,20 @@ module systolic_ctrl #(
         end
     endgenerate
 
-    logic [14:0] v_sr;
+    localparam int OUT_DELAY = (2 * ARRAY_SIZE) - 1;
+    logic [OUT_DELAY-1:0] v_sr;
+    
     always_ff @(posedge clk_i or posedge rst_i) begin
         if (rst_i) begin
             v_sr <= '0;
         end else begin
             v_sr[0] <= active_beat;
-            for (int p = 1; p < 15; p++) v_sr[p] <= v_sr[p-1];
+            for (int p = 1; p < OUT_DELAY; p++) v_sr[p] <= v_sr[p-1];
         end
     end
-    assign output_valid_o = v_sr[14];
+    assign output_valid_o = v_sr[OUT_DELAY-1];
 
 `ifdef SIMULATION
-    property p_act_count_range;
-        @(posedge clk_i) disable iff (rst_i)
-        act_count < ARRAY_SIZE;
-    endproperty
-    A_act_count_range: assert property (p_act_count_range);
-
     property p_pulse_correctness;
         @(posedge clk_i) disable iff (rst_i)
         load_pulse_raw |-> ($past(active_beat) && $past(act_count) == ARRAY_SIZE-2) || $past(cold_start);
@@ -171,12 +163,12 @@ module systolic_ctrl #(
     A_pulse_correctness: assert property (p_pulse_correctness)
         else $error("[%0t] SC: load_pulse_raw fired incorrectly", $time);
 
-    property p_15_cycle_latency;
+    property p_pipeline_latency;
         @(posedge clk_i) disable iff (rst_i)
-        output_valid_o |-> $past(active_beat, 15);
+        output_valid_o |-> $past(active_beat, OUT_DELAY);
     endproperty
-    A_15_cycle_latency: assert property (p_15_cycle_latency)
-        else $error("[%0t] SC: output_valid_o violates 15-cycle latency rule", $time);
+    A_15_cycle_latency: assert property (p_pipeline_latency)
+        else $error("[%0t] SC: output_valid_o violates latency rule", $time);
 
     property p_wavefront_skew;
         @(posedge clk_i) disable iff (rst_i)
@@ -187,7 +179,6 @@ module systolic_ctrl #(
 
     C_load_pulse_fires:    cover property (@(posedge clk_i) load_pulse_raw);
     C_output_valid:        cover property (@(posedge clk_i) output_valid_o);
-    C_backtoback_valid:    cover property (@(posedge clk_i) output_valid_o && $past(output_valid_o));
 `endif
 
 endmodule

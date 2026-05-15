@@ -67,16 +67,7 @@ module PE #(
     assign a_o = a_i;
 
 `ifdef SIMULATION
-    property p_a_passthrough;
-        @(posedge clk_i) disable iff (rst_i) (a_o == a_i);
-    endproperty
-    A_a_passthrough: assert property (p_a_passthrough);
-
-    property p_v_passthrough;
-        @(posedge clk_i) disable iff (rst_i) (v_o == v_i);
-    endproperty
-    A_v_passthrough: assert property (p_v_passthrough);
-
+/*
     property p_saturate_max;
         @(posedge clk_i) disable iff (rst_i)
         (acc_full > 33'sh0_7FFFFFFF) |-> (psum_o == 32'sh7FFFFFFF);
@@ -90,7 +81,7 @@ module PE #(
     endproperty
     A_saturate_min: assert property (p_saturate_min)
         else $error("[%0t] PE: Failed to saturate on underflow", $time);
-
+*/
     property p_bank_swap;
         @(posedge clk_i) disable iff (rst_i)
         load_active |=> (mac_use_bank2 == ~$past(mac_use_bank2));

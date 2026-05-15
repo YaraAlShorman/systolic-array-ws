@@ -1,5 +1,4 @@
 `timescale 1ns/1ps
-
 `ifndef SHADOW_LOADING_V1
 
 module top_mod_tb;
@@ -41,6 +40,7 @@ module top_mod_tb;
 `ifndef VERILATOR
         $fsdbDumpfile("waveform.fsdb");
         $fsdbDumpvars(0, top_mod_tb, "+mda");
+	$fsdbDumpSVA(0, top_mod_tb);
 `endif
         $dumpfile("top_mod_tb.vcd");
         $dumpvars(0, top_mod_tb);
@@ -209,7 +209,6 @@ module top_mod_tb;
         rst_i <= 1'b0; 
         repeat (3) @(posedge clk_i);
 
-        stream_cold_start_weights();
         if (TB_PING_PONG_ENABLED) begin
             $display("[%0t] Starting Simulation in High-Performance PING-PONG Mode", $time);
             stream_cold_start_weights();
@@ -272,7 +271,8 @@ module top_mod_tb;
         end
 
         $display("[%0t] SIMULATION COMPLETE", $time);
-        $finish;
+        repeat (20) @(posedge clk_i);
+	$finish;
     end
 
     initial begin : watchdog

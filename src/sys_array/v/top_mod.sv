@@ -23,7 +23,6 @@ logic [ARRAY_SIZE-1:0] load_active_row;
     logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] p_staggered;
     
     logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] w_skewed;
-    logic                                         weight_swap_pulse;
 
     logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] p_mesh_exit;
 
@@ -46,7 +45,6 @@ logic [ARRAY_SIZE-1:0] load_active_row;
         .load_active_row_o      (load_active_row),
         .psums_staggered_o      (p_staggered),
 	.weights_skewed_o       (w_skewed),          
-        .weight_swap_pulse_o    (weight_swap_pulse),
         .psums_from_mesh_i      (p_mesh_exit),
         .final_psums_o          (final_psums_o),
         .output_valid_o         (output_valid_o)
@@ -110,11 +108,33 @@ logic [ARRAY_SIZE-1:0] load_active_row;
             assign a_mesh[ii][0]   = act_skewed[ii];
             assign v_mesh[ii][0]   = v_skewed[ii];
             assign w_mesh[0][ii]   = w_skewed[ii];
-	    assign l_mesh[ii][0]   = load_active_row[ii]; // || cold_start_load_i;
+	    assign l_mesh[ii][0]   = load_active_row[ii]; 
             assign p_mesh[0][ii]   = p_staggered[ii];
             assign p_mesh_exit[ii] = p_mesh[ARRAY_SIZE][ii];
         end
     endgenerate
+
+`ifdef SIMULATION
+    generate
+        for (genvar ar = 0; ar < ARRAY_SIZE; ar++) begin : GEN_ASSERT_WAVE_ROW
+            for (genvar ac = 0; ac < ARRAY_SIZE; ac++) begin : GEN_ASSERT_WAVE_COL
+                if (ar > 0 || ac > 0) begin : check_wavefront
+                    localparam int WAVE_DELAY = ar + ac;
+                    
+		    property p_diagonal_wavefront;
+                        @(posedge clk_i) disable iff (rst_i)
+                        // The swap pulse at PE(r,c) must perfectly match 
+                        // the swap pulse that entered PE(0,0) exactly (r + c) cycles ago
+                        l_mesh[ar][ac] == $past(l_mesh[0][0], WAVE_DELAY);
+                    endproperty
+                    
+                    A_diagonal_wavefront: assert property (p_diagonal_wavefront)
+                        else $error("[%0t] TOP ASSERT: load_active wavefront broken at PE(%0d,%0d)", $time, ar, ac);
+                end
+            end
+        end
+    endgenerate
+`endif
 
 endmodule
 
