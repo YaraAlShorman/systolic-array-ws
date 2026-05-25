@@ -10,6 +10,12 @@ module top_mod #(
     input  logic activations_stopped,
     input  logic weight_en_i,
     input  logic cold_start_load_i,
+    // weight_reuse_i: 1 = suppress the auto bank-swap so the next matmul
+    // computes with the currently active weights again.  Required when
+    // the upstream is issuing a compute-only request (no fresh weights
+    // on the `weight_in` bus that cycle).  Drive 0 for the original
+    // load-every-matmul behavior.
+    input  logic weight_reuse_i,
     input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
     input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] weight_in,
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psum_in,
@@ -37,6 +43,7 @@ logic [ARRAY_SIZE-1:0] load_active_row;
         .activations_stopped (activations_stopped),
         .weight_en_i         (weight_en_i),
 	.cold_start          (cold_start_load_i),
+        .weight_reuse_i      (weight_reuse_i),
         .activations_i       (activations_i),
         .psum_in             (psum_in),
         .weight_in           (weight_in),
