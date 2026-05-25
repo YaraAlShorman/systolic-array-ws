@@ -9,6 +9,13 @@ module systolic_ctrl #(
     input  logic activations_stopped,
     input  logic weight_en_i,        
     input  logic cold_start,
+    // weight_reuse_i: when high, suppress the auto load_pulse_raw so the
+    // current active weight bank is preserved across the next matmul.
+    // This lets a compute-only request (no fresh weights on the bus)
+    // reuse the same weights instead of corrupting the active bank with
+    // whatever happens to be on `weight_in` at the auto-pulse cycle.
+    // Drive low (0) for the original "load-every-matmul" behavior.
+    input  logic weight_reuse_i,
     
     input  logic signed [ARRAY_SIZE-1:0][DATA_WIDTH-1:0] activations_i,
     input  logic signed [ARRAY_SIZE-1:0][PSUM_WIDTH-1:0] psum_in,
@@ -52,7 +59,8 @@ module systolic_ctrl #(
                     act_count <= act_count + 1'b1;
                 end
                 
-                if ((act_count == (ARRAY_SIZE - 2)) && ping_pong_en) begin
+                if ((act_count == (ARRAY_SIZE - 2)) && ping_pong_en
+                    && !weight_reuse_i) begin
                     load_pulse_raw <= 1'b1;   
                 end
             end

@@ -21,6 +21,8 @@ module top_mod_tb;
     logic activations_stopped;
     logic weight_en_i;
     logic cold_start_load_i;
+    // Original TB loads fresh weights for every matmul, so reuse is always off.
+    logic weight_reuse_i = 1'b0;
     logic signed [N-1:0][DATA_WIDTH-1:0] activations_i;
     logic signed [N-1:0][DATA_WIDTH-1:0] weight_in;
     logic signed [N-1:0][PSUM_WIDTH-1:0] psum_in;
