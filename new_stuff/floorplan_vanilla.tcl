@@ -1,0 +1,11 @@
+create_guide -name u_soc_top/u_sp -area {1100 400 1785 1125}
+create_guide -name u_soc_top/u_tp -area {1450 180 1785 400}
+#create_guide -name u_soc_top/u_q -area {1400 1150 1780 1785}
+create_guide -name u_soc_top/u_q -area {1400 1350 1780 1785}
+create_guide -name u_soc_top/u_decoder -area {1300 1350 1400 1780}
+create_guide -name u_soc_top/g_vanilla_mesh.u_mesh -area {180 400 950 1785}
+create_guide -name u_soc_top/u_rd -area {800 530 1200 700}
+#create_guide -name u_soc_top/u_md -area {800 530 1200 700}
+create_guide -name u_soc_top/u_depack -area {400 180 530 400}
+create_guide -name u_bsg_link_wrapper/link_rx_i -area {950 1350 1300 1780}
+create_guide -name u_bsg_link_wrapper/link_tx_i -area {180 180 400 400}

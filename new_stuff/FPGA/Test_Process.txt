@@ -1,0 +1,22 @@
+General testing process:
+- Get one FPGA
+    - Run fpga_tb_basic (this includes fpga_core_basic)
+        - fpga_..._basic is top_chip
+    - Run fpga_tb (includes fpga_core)
+        - fpga_... is chip_top (pad rings, bsg_link, etc.)
+- Get another FPGA
+    - Connect the GPIO pins
+        - TB FPGA's GPIO0 to GPIO1 of receiver (f2c stuff: TB output goes to chip's input)
+        - TB FPGA's GPIO1 to GPIO0 of receiver (c2f stuff: TB input gets chip output)
+        - Refer to diagram for easier wiring, but
+            - GPIO0[31:0] is f2c bsg_link data
+            - ...
+            - ...
+            - ...
+            - ... (Ask hippopotamus66 for the diagram. She should have it)
+    - Try to run the GPIO test modules
+        - They are just counters and hexes to ensure that the GPIOs communicate properly
+    - TB FPGA gets loaded with the TB module
+        - Chip FPGA gets loaded with the core module
+        - Test chip_top (top_chip has no bsg_link, so FPGA comms are not good)
+- If all 5 tests work, go ahead and try to test your chip!

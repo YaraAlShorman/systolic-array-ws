@@ -1,0 +1,361 @@
+// gpio_tx.sv
+//
+// bsg_link TX endpoint for FPGA-to-FPGA GPIO loopback test.
+// Sends KEY-incremented hex counters as 32-bit flits via
+// bsg_link_wrapper (parity-enabled, per temp3).
+// Receives and displays the echo returned by gpio_rx.
+//
+// Flit format (TX -> chip):
+//   [31:6]  unused (zero)
+//   [5:4]   half_hex_val (2-bit counter)
+//   [3:0]   hex_val (4-bit counter)
+//
+// Reset sequence auto-starts on power-on through the INIT state,
+// which asserts all resets before proceeding. SW[9] rising edge
+// re-triggers the sequence at any time.
+//
+// GPIO_0 pin map (TX drives -> chip's GPIO_1):
+//   [0]     upstream_io_clk_r_o   (forwarded TX clock)
+//   [1]     upstream_io_valid_r_o
+//   [18:2]  upstream_io_data_r_o[16:0]  (17-bit channel)
+//   [19]    downstream_core_token_r_o   (credit return to chip upstream)
+//   [20]    hard_reset
+//   [35:21] unused
+//
+// GPIO_1 pin map (TX reads <- chip's GPIO_0):
+//   [0]     downstream_io_clk_i
+//   [1]     downstream_io_valid_i
+//   [18:2]  downstream_io_data_i[16:0]  (17-bit channel)
+//   [19]    token_clk_i                 (credit return from chip downstream)
+//   [35:20] unused
+
+module gpio_tx (
+     input  logic        CLOCK_50
+    ,input  logic [9:0]  SW
+    ,input  logic [3:0]  KEY
+    ,output logic [6:0]  HEX5, HEX4, HEX3, HEX2, HEX1, HEX0
+    ,output logic [9:0]  LEDR
+    ,inout  logic [35:0] GPIO_0
+    ,inout  logic [35:0] GPIO_1
+);
+
+    // =========================================================
+    //  Clocks
+    // =========================================================
+
+    // core_clk and dn_io_clk both run from CLOCK_50 (50 MHz).
+    // bsg_link_oddr_phy divides io_master_clk by 2 internally,
+    // forwarding a 25 MHz source-synchronous clock to the chip.
+    logic        core_clk;
+    logic        dn_io_clk;
+    logic [31:0] clkdiv;
+
+    assign core_clk  = clkdiv[16];  // ~381 Hz: reset waits are human-observable
+    assign dn_io_clk = clkdiv[16];  // same domain; bsg_link PHY divides by 2 internally
+
+    clock_divider clk_div (.clock(CLOCK_50), .divided_clocks(clkdiv));
+
+    // Slow UI clock: SW[8]=1 uses KEY[3] as manual clock; otherwise ~1.5 Hz
+    logic ui_clk;
+    assign ui_clk = SW[8] ? KEY[3] : clkdiv[24];
+
+
+    // =========================================================
+    //  Reset signals
+    // =========================================================
+
+    logic hard_reset;
+    logic fpga_core_reset;
+    logic fpga_tx_io_link_reset;
+    logic fpga_tx_async_token_reset;
+    logic fpga_rx_io_link_reset;
+    logic fpga_rx_io_link_reset_sync;
+
+
+    // =========================================================
+    //  GPIO signal declarations
+    // =========================================================
+
+    // fpga -> chip (GPIO_0, TX drives)
+    logic        fpga_to_chip_clk;
+    logic        fpga_to_chip_valid;
+    logic [16:0] fpga_to_chip_data;
+    logic        fpga_to_chip_token;
+
+    // chip -> fpga (GPIO_1, TX reads)
+    logic        chip_to_fpga_clk;
+    logic        chip_to_fpga_valid;
+    logic [16:0] chip_to_fpga_data;
+    logic        chip_to_fpga_token;
+
+    // TX drives GPIO_0
+    assign GPIO_0[0]     = fpga_to_chip_clk;
+    assign GPIO_0[1]     = fpga_to_chip_valid;
+    assign GPIO_0[18:2]  = fpga_to_chip_data;
+    assign GPIO_0[19]    = fpga_to_chip_token;
+    assign GPIO_0[20]    = hard_reset;
+    assign GPIO_0[35:21] = '0;
+
+    // TX reads GPIO_1
+    assign chip_to_fpga_clk   = GPIO_1[0];
+    assign chip_to_fpga_valid = GPIO_1[1];
+    assign chip_to_fpga_data  = GPIO_1[18:2];
+    assign chip_to_fpga_token = GPIO_1[19];
+
+
+    // =========================================================
+    //  Sync fpga_rx_io_link_reset into the chip forwarded clock domain
+    // =========================================================
+
+    bsg_sync_sync #(
+        .width_p(1)
+    ) fpga_rx_reset_sync (
+        .oclk_i      (chip_to_fpga_clk)
+       ,.iclk_data_i (fpga_rx_io_link_reset)
+       ,.oclk_data_o (fpga_rx_io_link_reset_sync)
+    );
+
+
+    // =========================================================
+    //  bsg_link_wrapper instantiation
+    // =========================================================
+
+    logic [31:0] fpga_tx_data;
+    logic        fpga_tx_valid;
+    logic        fpga_tx_ready;
+    logic [31:0] fpga_rx_data;
+    logic        fpga_rx_valid;
+    logic        fpga_rx_yumi;
+    logic        fpga_rx_parity_error;
+
+    bsg_link_wrapper #(
+        .FLIT_WIDTH   (32),
+        .CHANNEL_WIDTH(17)
+    ) u_link (
+        .core_clk_i                 (core_clk)
+       ,.reset_i                    (fpga_core_reset)
+
+       ,.io_master_clk_i            (dn_io_clk)
+       ,.upstream_io_link_reset_i   (fpga_tx_io_link_reset)
+       ,.async_token_reset_i        (fpga_tx_async_token_reset)
+       ,.token_clk_i                (chip_to_fpga_token)
+
+       ,.downstream_io_link_reset_i (fpga_rx_io_link_reset_sync)
+       ,.downstream_io_clk_i        (chip_to_fpga_clk)
+       ,.downstream_io_data_i       (chip_to_fpga_data)
+       ,.downstream_io_valid_i      (chip_to_fpga_valid)
+
+       ,.upstream_io_clk_r_o        (fpga_to_chip_clk)
+       ,.upstream_io_data_r_o       (fpga_to_chip_data)
+       ,.upstream_io_valid_r_o      (fpga_to_chip_valid)
+
+       ,.downstream_core_token_r_o  (fpga_to_chip_token)
+
+       ,.rx_data_o                  (fpga_rx_data)
+       ,.rx_valid_o                 (fpga_rx_valid)
+       ,.rx_yumi_i                  (fpga_rx_yumi)
+       ,.rx_parity_error_o          (fpga_rx_parity_error)
+
+       ,.tx_data_i                  (fpga_tx_data)
+       ,.tx_valid_i                 (fpga_tx_valid)
+       ,.tx_ready_o                 (fpga_tx_ready)
+    );
+
+
+    // =========================================================
+    //  Reset state machine
+    //
+    //  Auto-starts on power-on: FFs reset to 0, so wait_cnt=0
+    //  and reset_seq=INIT immediately trigger the INIT case,
+    //  which asserts all resets before stepping through the
+    //  bring-up sequence.  SW[9] rising edge re-triggers.
+    //
+    //  Sequence:
+    //    INIT              – assert all resets; wait 8 cycles
+    //    TX_ASYNC_ASSERT   – pulse async_token high; wait 2 cycles
+    //    TX_ASYNC_DEASSERT – deassert async_token; wait 8 cycles
+    //    TX_IO_DEASSERT    – release TX upstream IO reset; wait 8 cycles
+    //    HARD_RST_DEASSERT – release hard_reset (chip starts); wait 64 cycles
+    //    RX_IO_DEASSERT    – release RX downstream IO reset; wait 8 cycles
+    //    CORE_RST_DEASSERT – release core reset; go to START_MAIN
+    //    START_MAIN        – link_enable asserted (combinational)
+    // =========================================================
+
+    typedef enum logic [2:0] {
+        INIT              = 3'h0,
+        TX_ASYNC_ASSERT   = 3'h1,
+        TX_ASYNC_DEASSERT = 3'h2,
+        TX_IO_DEASSERT    = 3'h3,
+        HARD_RST_DEASSERT = 3'h4,
+        RX_IO_DEASSERT    = 3'h5,
+        CORE_RST_DEASSERT = 3'h6,
+        START_MAIN        = 3'h7
+    } reset_state_t;
+
+    reset_state_t reset_seq;
+    logic [10:0]  wait_cnt;
+    logic         sw9_prev;
+
+    // link_enable is purely combinational: active once START_MAIN is reached
+    wire link_enable = (reset_seq == START_MAIN);
+
+    always_ff @(posedge core_clk) sw9_prev <= SW[9];
+
+    // SW[9] rising edge re-triggers; jumps back to INIT immediately
+    wire start_reset_seq = SW[9] & ~sw9_prev;
+
+    // wait_done: counter at 0, not yet settled in START_MAIN
+    wire wait_done = (wait_cnt == 11'd0) && (reset_seq != START_MAIN);
+
+    always_ff @(posedge core_clk) begin
+        if (start_reset_seq) begin
+            reset_seq <= INIT;
+            wait_cnt  <= 11'd0; // INIT fires next cycle
+
+        end else if (wait_done) begin
+            case (reset_seq)
+                INIT: begin
+                    // Assert all resets before stepping through sequence
+                    hard_reset                <= 1'b1;
+                    fpga_core_reset           <= 1'b1;
+                    fpga_tx_io_link_reset     <= 1'b1;
+                    fpga_tx_async_token_reset <= 1'b0;
+                    fpga_rx_io_link_reset     <= 1'b1;
+                    reset_seq                 <= TX_ASYNC_ASSERT;
+                    wait_cnt                  <= 11'd8;
+                end
+                TX_ASYNC_ASSERT: begin
+                    fpga_tx_async_token_reset <= 1'b1;
+                    reset_seq                 <= TX_ASYNC_DEASSERT;
+                    wait_cnt                  <= 11'd2;
+                end
+                TX_ASYNC_DEASSERT: begin
+                    fpga_tx_async_token_reset <= 1'b0;
+                    reset_seq                 <= TX_IO_DEASSERT;
+                    wait_cnt                  <= 11'd8;
+                end
+                TX_IO_DEASSERT: begin
+                    fpga_tx_io_link_reset     <= 1'b0;
+                    reset_seq                 <= HARD_RST_DEASSERT;
+                    wait_cnt                  <= 11'd8;
+                end
+                HARD_RST_DEASSERT: begin
+                    hard_reset                <= 1'b0;
+                    reset_seq                 <= RX_IO_DEASSERT;
+                    wait_cnt                  <= 11'd64;
+                end
+                RX_IO_DEASSERT: begin
+                    fpga_rx_io_link_reset     <= 1'b0;
+                    reset_seq                 <= CORE_RST_DEASSERT;
+                    wait_cnt                  <= 11'd8;
+                end
+                CORE_RST_DEASSERT: begin
+                    fpga_core_reset           <= 1'b0;
+                    reset_seq                 <= START_MAIN;
+                end
+                default: begin
+                    reset_seq <= INIT;
+                    wait_cnt  <= 11'd0;
+                end
+            endcase
+
+        end else begin
+            // Prevent wrap-around at 0 in START_MAIN
+            if (wait_cnt != 11'd0)
+                wait_cnt <= wait_cnt - 11'd1;
+        end
+    end
+
+
+    // =========================================================
+    //  Hex counters  (UI clock domain, synced to core_clk for TX)
+    // =========================================================
+
+    logic [3:0] hex_val;
+    logic [1:0] half_hex_val;
+
+    always_ff @(posedge ui_clk) begin
+        if (!KEY[0]) begin
+            hex_val      <= hex_val      + 4'h1;
+            half_hex_val <= half_hex_val + 2'h1;
+        end
+    end
+
+    // Two-stage sync into core_clk domain
+    logic [3:0] hex_val_s1,      hex_val_core;
+    logic [1:0] half_hex_val_s1, half_hex_val_core;
+    logic [3:0] hex_val_prev;
+
+    always_ff @(posedge core_clk) begin
+        hex_val_s1        <= hex_val;
+        half_hex_val_s1   <= half_hex_val;
+        hex_val_core      <= hex_val_s1;
+        half_hex_val_core <= half_hex_val_s1;
+        hex_val_prev      <= hex_val_core;
+    end
+
+    wire counter_changed = (hex_val_core != hex_val_prev);
+
+
+    // =========================================================
+    //  TX data path
+    // =========================================================
+
+    always_ff @(posedge core_clk) begin
+        if (fpga_core_reset) begin
+            fpga_tx_valid <= 1'b0;
+            fpga_tx_data  <= '0;
+        end else if (link_enable) begin
+            if (counter_changed && !fpga_tx_valid) begin
+                fpga_tx_valid <= 1'b1;
+                fpga_tx_data  <= {26'b0, half_hex_val_core, hex_val_core};
+            end else if (fpga_tx_valid && fpga_tx_ready) begin
+                fpga_tx_valid <= 1'b0;
+            end
+        end
+    end
+
+
+    // =========================================================
+    //  RX data path  (receive echo from gpio_rx / chip)
+    // =========================================================
+
+    logic [31:0] rx_latch;
+    assign fpga_rx_yumi = fpga_rx_valid;
+
+    always_ff @(posedge core_clk) begin
+        if (fpga_core_reset)
+            rx_latch <= '0;
+        else if (fpga_rx_valid)
+            rx_latch <= fpga_rx_data;
+    end
+
+
+    // =========================================================
+    //  HEX display
+    //
+    //  HEX0: local hex_val       HEX2: echoed hex_val
+    //  HEX1: local half_hex_val  HEX3: echoed half_hex_val
+    //  HEX5: reset state
+    // =========================================================
+
+    seg7 seg7_0 (.hex(hex_val_core),              .leds(HEX0));
+    seg7 seg7_1 (.hex({2'b0, half_hex_val_core}), .leds(HEX1));
+    seg7 seg7_2 (.hex(rx_latch[3:0]),             .leds(HEX2));
+    seg7 seg7_3 (.hex({2'b0, rx_latch[5:4]}),     .leds(HEX3));
+    seg7 seg7_4 (.hex(4'b0),                      .leds(HEX4));
+    seg7 seg7_5 (.hex({1'b0, reset_seq}),         .leds(HEX5));
+
+
+    // =========================================================
+    //  LED status
+    // =========================================================
+
+    assign LEDR[0]   = fpga_tx_ready;
+    assign LEDR[1]   = fpga_tx_valid;
+    assign LEDR[2]   = fpga_rx_valid;
+    assign LEDR[3]   = link_enable;
+    assign LEDR[8:4] = '0;
+    assign LEDR[9]   = fpga_rx_parity_error;
+
+endmodule
